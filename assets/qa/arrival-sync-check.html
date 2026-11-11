@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Welcome timing verification</title>
+<style>body{margin:48px;max-width:780px;background:#f5f6f1;color:#173b30;font:17px system-ui}button{padding:14px 24px;background:#185f4b;color:white;border:0;border-radius:8px;font:inherit}pre{padding:24px;background:#e2eae3;white-space:pre-wrap;border-radius:12px}</style>
+<h1>Welcome timing verification</h1><p>Uses the actual English welcome file, muted. The doors must remain closed until the audio ends.</p><button id="run">Verify welcome timing</button><pre id="result">Ready</pre>
+<script type="module">
+import {createArrivalVoice} from '../../src/arrival-voice.js';
+import {createArrivalIntro} from '../../src/arrival-intro.js';
+document.querySelector('#run').onclick=async()=>{
+ const result=document.querySelector('#result'),button=document.querySelector('#run');button.disabled=true;
+ class MutedAudio extends Audio{constructor(url){super(url);this.muted=true;}}
+ const voice=createArrivalVoice({AudioClass:MutedAudio,onProgress:f=>{result.textContent='Loading actual welcome: '+Math.round(f*100)+'%';}}),intro=createArrivalIntro();let timer,deadline;
+ try{
+  await voice.load();intro.start(voice.state().duration);await voice.play();const start=performance.now();let previous=start,endAt=0,openedAt=0;
+  await new Promise((resolve,reject)=>{
+   deadline=setTimeout(()=>reject(Error('Audio did not finish')),45000);
+   timer=setInterval(()=>{const now=performance.now(),audio=voice.state();if(audio.error){reject(Error(audio.error));return;}if(audio.finished&&!endAt)endAt=(now-start)/1000;const step=intro.update((now-previous)/1000,{audioFinished:audio.finished});previous=now;if(step.door>0&&!audio.finished){reject(Error('Door opened during speech'));return;}if(step.door>0&&!openedAt)openedAt=(now-start)/1000;result.textContent='English welcome: '+audio.currentTime.toFixed(1)+' / '+audio.duration.toFixed(1)+' seconds\nLift: '+step.phase+'\nDoors: '+Math.round(step.door*100)+'%\nSpeaker output: muted';if(!intro.active)resolve();},100);
+  });
+  result.textContent='PASS\n\nEnglish welcome: '+voice.state().duration.toFixed(2)+' seconds\nAudio ended: '+endAt.toFixed(2)+' seconds\nDoors first opened: '+openedAt.toFixed(2)+' seconds\nDoors stayed closed throughout speech\nExit happened only after full opening\n\nSpeaker output: muted';document.body.dataset.result='pass';
+ }catch(error){result.textContent='FAIL · '+error.message;document.body.dataset.result='fail';}
+ finally{clearInterval(timer);clearTimeout(deadline);voice.destroy();button.disabled=false;}
+};
+</script></html>

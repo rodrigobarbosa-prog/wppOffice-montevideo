@@ -1,0 +1,29 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Interpretación local por frases</title>
+<style>body{margin:48px;max-width:780px;background:#f5f6f1;color:#173b30;font:17px system-ui}button{padding:14px 24px;background:#185f4b;color:white;border:0;border-radius:8px;font:inherit}pre{padding:24px;background:#e2eae3;white-space:pre-wrap;border-radius:12px}</style>
+<h1>Interpretación local por frases</h1><p>Prueba la misma captura, traducción y pista de salida que usa el presentador, con una voz sintética. No captura micrófono ni reproduce sonido.</p><button id="run">Probar pista interpretada</button><pre id="result">Listo para probar</pre>
+<script type="module">
+import {startLocalTranslation} from '../../src/local-translation.js';
+document.querySelector('#run').onclick=async()=>{
+ const result=document.querySelector('#result'),button=document.querySelector('#run');button.disabled=true;
+ let context,translator,timer,deadline,peak=0,began=false,sourceStream,firstVoice=0;
+ try{
+  context=new AudioContext({sampleRate:48000});await context.resume();
+  const voice=await context.decodeAudioData(await (await fetch('local-voice-es.wav')).arrayBuffer());
+  const source=context.createBufferSource();source.buffer=voice;sourceStream=context.createMediaStreamDestination();source.connect(sourceStream);
+  const analyser=context.createAnalyser(),silent=context.createGain(),data=new Float32Array(1024);analyser.fftSize=1024;silent.gain.value=0;analyser.connect(silent).connect(context.destination);
+  const status=await (await fetch('/voice/status')).json();const start=performance.now();
+  const finished=new Promise(async(resolve,reject)=>{
+   deadline=setTimeout(()=>reject(Error('No llegó audio interpretado')),60000);
+   try{
+    translator=await startLocalTranslation(sourceStream.stream,{preservesVoice:status.preservesVoice,onStatus:text=>result.textContent=text,onError:reject,onSpeaking:value=>{if(value){began=true;firstVoice=firstVoice||performance.now();}else if(began)resolve();}});
+    context.createMediaStreamSource(translator.stream).connect(analyser);
+    timer=setInterval(()=>{analyser.getFloatTimeDomainData(data);peak=Math.max(peak,Math.sqrt(data.reduce((n,x)=>n+x*x,0)/data.length));},50);
+    source.start();
+   }catch(error){reject(error);}
+  });
+  await finished;if(peak<.003)throw Error('La pista de salida no contiene voz');
+  result.textContent='PASS\n\nPista de interpretación: audio presente\nPico RMS: '+peak.toFixed(4)+'\nPrimer audio inglés: '+((firstVoice-start)/1000).toFixed(1)+' s desde el inicio de la frase\nMotor de timbre: '+(status.preservesVoice?'OpenVoice · adaptación local':'voz sintética')+'\nGestos: inicio y fin de habla recibidos\n\nMicrófono real: no utilizado\nAltavoces: silenciados\nAudio enviado a Internet: ninguno';document.body.dataset.result='pass';
+ }catch(error){result.textContent='FAIL · '+error.message;document.body.dataset.result='fail';}
+ finally{clearInterval(timer);clearTimeout(deadline);translator?.destroy();sourceStream?.stream.getTracks().forEach(t=>t.stop());await context?.close();button.disabled=false;}
+};
+</script></html>

@@ -1,0 +1,8 @@
+@sapphi-red/web-noise-suppressor 0.4.1 - MIT (see LICENSE).
+https://github.com/sapphi-red/web-noise-suppressor
+Includes @shiguredo/rnnoise-wasm 2022.2.0 - Copyright Shiguredo Inc. Apache-2.0.
+https://github.com/shiguredo/rnnoise-wasm
+RNNoise - BSD-3-Clause (see RNNOISE-LICENSE.txt).
+https://github.com/xiph/rnnoise
+Local change to rnnoise-worklet.js: signal initialization success/failure and
+start the MessagePort, so teardown and initialization can be verified.

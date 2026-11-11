@@ -1,0 +1,68 @@
+{
+  "profile": "2026-11-11-clear-v2",
+  "voice": "bm_fable",
+  "sampleRate": 24000,
+  "processing": "70 Hz high-pass, +1.5 dB presence, speech-level matching, -1.5 dBFS peak ceiling; no pitch/time conversion",
+  "clips": [
+    {
+      "file": "arrival-welcome-en.wav",
+      "voice": "bm_fable",
+      "language": "en-gb",
+      "text": "Welcome to W P P Production, Montevideo. Let\u2019s meet the team on floor fourteen.",
+      "duration": 5.259,
+      "peakDb": -1.5,
+      "rmsDb": -22.25,
+      "clippedSamples": 0
+    },
+    {
+      "file": "tour-en-arrival.wav",
+      "voice": "bm_fable",
+      "language": "en-gb",
+      "text": "Welcome to WPP Production in Montevideo. We are arriving on floor fourteen. When the doors open, your presenter will be waiting to guide you through the office.",
+      "duration": 9.063,
+      "peakDb": -1.5,
+      "rmsDb": -22.13,
+      "clippedSamples": 0
+    },
+    {
+      "file": "tour-en-entrance.wav",
+      "voice": "bm_fable",
+      "language": "en-gb",
+      "text": "This is the office entrance. The door starts closed. Move closer, look at it, and press E, or use the button on screen, to open or close it.",
+      "duration": 8.106,
+      "peakDb": -1.5,
+      "rmsDb": -22.14,
+      "clippedSamples": 0
+    },
+    {
+      "file": "tour-en-office.wav",
+      "voice": "bm_fable",
+      "language": "en-gb",
+      "text": "This is our workspace. Facing workstations and meeting rooms connect the different areas of the team. I will stay beside you as you explore.",
+      "duration": 7.864,
+      "peakDb": -1.51,
+      "rmsDb": -22.15,
+      "clippedSamples": 0
+    },
+    {
+      "file": "tour-en-meeting.wav",
+      "voice": "bm_fable",
+      "language": "en-gb",
+      "text": "These are our meeting rooms. Glass fronts keep a visual connection with the office, with tables and equipment for teamwork.",
+      "duration": 6.48,
+      "peakDb": -1.5,
+      "rmsDb": -22.18,
+      "clippedSamples": 0
+    },
+    {
+      "file": "tour-en-kitchen.wav",
+      "voice": "bm_fable",
+      "language": "en-gb",
+      "text": "This is the kitchen and the team gathering space. Take a moment to look around before continuing.",
+      "duration": 5.434,
+      "peakDb": -1.5,
+      "rmsDb": -22.21,
+      "clippedSamples": 0
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Prueba de voz suave</title>
+<style>body{margin:50px;max-width:760px;background:#f5f6f1;color:#173b30;font:17px system-ui}button{padding:14px 24px;background:#185f4b;color:white;border:0;border-radius:8px;font:inherit}pre{padding:24px;background:#e2eae3;white-space:pre-wrap;border-radius:12px}</style>
+<h1>Micrófono: voz suave</h1><p>Voz local sintetizada a volumen normal y bajo. Sin micrófono ni altavoces.</p><button id="run">Probar voz suave</button><pre id="result">Listo para probar</pre>
+<script type="module">
+import {processMicrophone} from '../../src/microphone-processing.js';
+const result=document.getElementById('result');
+document.getElementById('run').onclick=async()=>{
+ document.getElementById('run').disabled=true;let context,filter;
+ try{
+  context=new AudioContext();await context.resume();
+  const raw=context.createMediaStreamDestination(),level=context.createGain();level.connect(raw);
+  filter=await processMicrophone(raw.stream);if(filter.mode!=='balanced')throw Error('Procesador no disponible: '+filter.mode);
+  const source=context.createMediaStreamSource(filter.stream),analyser=context.createAnalyser(),silent=context.createGain();silent.gain.value=0;analyser.fftSize=2048;source.connect(analyser).connect(silent).connect(context.destination);
+  const data=new Float32Array(2048),wait=ms=>new Promise(r=>setTimeout(r,ms)),rms=()=>{analyser.getFloatTimeDomainData(data);return Math.sqrt(data.reduce((sum,v)=>sum+v*v,0)/data.length);};
+  const voice=await context.decodeAudioData(await (await fetch('local-voice-es.wav')).arrayBuffer());
+  async function measure(gain){level.gain.value=gain;const speech=context.createBufferSource();speech.buffer=voice;speech.connect(level);speech.start();let peak=0;for(let i=0;i<20;i++){await wait(150);peak=Math.max(peak,rms());}speech.stop();await wait(300);return peak;}
+  result.textContent='Comprobando voz normal…';const normal=await measure(1);
+  result.textContent='Comprobando la misma voz al 5%…';const quiet=await measure(.05);
+  await wait(500);const silence=rms(),ratio=quiet/normal,pass=normal>.005&&quiet>.0003&&ratio>.03&&silence<.00001;
+  result.textContent=(pass?'PASS':'FAIL')+'\n\nVoz normal: '+normal.toFixed(6)+' RMS\nVoz al 5%: '+quiet.toFixed(6)+' RMS\nProporción conservada: '+(ratio*100).toFixed(1)+'%\nSilencio: '+silence.toFixed(6)+' RMS\n\nSin compuerta ni doble supresión neuronal.\nGanancia automática solicitada al capturar un micrófono real.\nNo evalúa un micrófono físico ni la respiración del usuario.';document.body.dataset.result=pass?'pass':'fail';
+  raw.stream.getTracks().forEach(t=>t.stop());
+ }catch(error){result.textContent='FAIL · '+error.message;document.body.dataset.result='fail';}
+ finally{filter?.destroy();await context?.close();document.getElementById('run').disabled=false;}
+};
+</script></html>

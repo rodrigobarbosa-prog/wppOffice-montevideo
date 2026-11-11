@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Visit media transport check</title><style>body{background:#132c29;color:#e9fff8;font:18px system-ui;padding:35px}button{font:inherit;padding:12px}video,canvas{width:360px;display:inline-block;background:#000}output{display:block;margin:20px 0}</style><h1>Visit media transport check</h1><p>Synthetic test pattern only. No microphone or screen permission is requested.</p><button id="run">Run transport check</button><output id="result">Ready</output><canvas id="source" width="640" height="360"></canvas><video id="received" autoplay muted playsinline></video><script type="module">
+import {createVisitSession} from '../../src/visit-session.js';
+const result=document.getElementById('result'),video=document.getElementById('received'),canvas=document.getElementById('source'),context=canvas.getContext('2d');
+document.getElementById('run').onclick=()=>{
+ document.getElementById('run').disabled=true;result.textContent='Connecting two peers…';
+ let opens=0,frames=0,finished=false,stream;
+ const sessions=[];let paint,timeout;
+ function finish(message){if(finished)return;finished=true;result.textContent=message;result.dataset.status=message.startsWith('PASS')?'pass':'fail';clearInterval(paint);clearTimeout(timeout);stream?.getTracks().forEach(t=>t.stop());sessions.forEach(s=>s.destroy());}
+ const status=text=>{if(text==='Visit connected'&&++opens===2){stream=canvas.captureStream(12);sessions[0].media([stream]);result.textContent='Sending synthetic video over WebRTC…';}};
+ sessions.push(createVisitSession({onStatus:status}));
+ sessions.push(createVisitSession({onStatus:status,onScreen:media=>{if(!media)return;video.srcObject=media;video.play().catch(()=>{});}}));
+ sessions[0].publish({role:'collaborator'});sessions[1].publish({role:'client'});
+ paint=setInterval(()=>{frames++;context.fillStyle=frames%2?'#48c9a4':'#236fcb';context.fillRect(0,0,640,360);context.fillStyle='#fff';context.font='40px sans-serif';context.fillText('Frame '+frames,60,180);if(video.videoWidth===640&&video.currentTime>.3)finish('PASS · live 640×360 video received by the client');},80);
+ timeout=setTimeout(()=>finish('FAIL · no received video within 12 seconds'),12000);
+};
+</script></html>

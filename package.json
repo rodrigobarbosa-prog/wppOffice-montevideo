@@ -1,0 +1,24 @@
+{
+  "name": "wpp-office-pilot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:presenter:mixamo": "node scripts/build-mixamo.mjs",
+    "build:client:mixamo": "node scripts/build-mixamo.mjs --client",
+    "build:collaborator:mixamo": "node scripts/build-mixamo.mjs --collaborator",
+    "start:connections": "node session-bridge.mjs",
+    "check:lobby": "node --check src/lobby.js && node --check src/lobby-model.js && node --check src/session-address.js",
+    "check:visit": "node --check src/client-follow.js && node --check src/collaborator-avatar.js && node --check src/visit-controls.js && node --check src/visit-media.js && node --check src/visit-session.js && node --check session-server.mjs && node --check session-bridge.mjs",
+    "check:presenter": "node --check src/mixamo-presenter.js && node --check src/client-avatar.js && node --check src/visit-views.js && node --check scripts/build-mixamo.mjs",
+    "start": "node server.mjs",
+    "check": "node --check src/main.js && node --check src/route-world.js && node --check src/surface-materials.js && node --check src/visuals.js && node --check src/ceiling-layout.js && node --check src/meeting-rooms.js && node --check src/kitchen.js && node --check src/harbor.js && node --check src/arrival-layout.js && node --check src/arrival-details.js && node --check src/entry-door-state.js && node --check src/entry-door.js && node --check src/presenter-avatar.js && node --check src/host-motion.js && node --check src/companion-placement.js && node --check src/tour-voice.js && node --check src/host-animation.js && node --check server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "build": "node scripts/build-cloudflare.mjs",
+    "cloudflare:voice": "node scripts/prepare-cloud-voice.mjs",
+    "cloudflare:dev": "npm run build && wrangler dev",
+    "cloudflare:deploy": "npm run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.157.0"
+  }
+}

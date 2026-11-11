@@ -1,0 +1,11 @@
+import {narrationFor} from '../src/tour-voice.js';
+import {voiceProfile} from '../src/voice-profile.js';
+import {writeFile,mkdir} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+await mkdir(new URL('../artifacts/',import.meta.url),{recursive:true});
+const clips=[{file:'arrival-welcome-en.wav',text:voiceProfile.welcome},...Object.entries({arrival:'Hall',entrance:'Acceso',office:'Pasillo',meeting:'Sala ',kitchen:'Cocina'}).map(([zone,location])=>({file:'tour-en-'+zone+'.wav',text:narrationFor(location,'en').text}))];
+const job=new URL('../artifacts/voice-render-job.json',import.meta.url);await writeFile(job,JSON.stringify({profile:voiceProfile.version,voice:voiceProfile.id,clips}));
+const python=fileURLToPath(new URL('../artifacts/voice-env/Scripts/python.exe',import.meta.url));
+const child=spawn(python,[fileURLToPath(new URL('./render-tour-audio.py',import.meta.url)),fileURLToPath(job)],{stdio:'inherit',windowsHide:true});
+await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',code=>code===0?resolve():reject(Error('Voice render failed: '+code)));});

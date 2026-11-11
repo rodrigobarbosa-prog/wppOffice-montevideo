@@ -1,0 +1,24 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Voz y traducción local</title>
+<style>body{margin:48px;max-width:780px;background:#f5f6f1;color:#173b30;font:17px system-ui}button{padding:14px 24px;background:#185f4b;color:white;border:0;border-radius:8px;font:inherit}pre{padding:24px;background:#e2eae3;white-space:pre-wrap;border-radius:12px}</style>
+<h1>Voz y traducción local</h1><p>Usa una frase sintética de prueba. No captura micrófono, no reproduce audio y no envía datos a Internet.</p><button id="run">Probar voz y traducción</button><pre id="result">Listo para probar</pre>
+<script type="module">
+document.querySelector('#run').onclick=async()=>{
+ const out=document.querySelector('#result'),button=document.querySelector('#run');button.disabled=true;let context;
+ try{
+  context=new AudioContext();const start=performance.now();
+  out.textContent='Generando voz española en este equipo…';
+  const response=await fetch('/voice/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'Bienvenidos a nuestra oficina. Vamos a conocer al equipo de producción.',language:'es'})});
+  if(!response.ok)throw Error('Síntesis local no disponible');const wav=await response.arrayBuffer();const source=await context.decodeAudioData(wav.slice(0));const ttsSeconds=(performance.now()-start)/1000;
+  await context.resume();const stream=context.createMediaStreamDestination(),player=context.createBufferSource();player.buffer=source;player.connect(stream);
+  const recorder=new MediaRecorder(stream.stream),chunks=[];recorder.ondataavailable=e=>chunks.push(e.data);
+  out.textContent='Codificando la voz de prueba como el micrófono del navegador…';
+  const recorded=new Promise(resolve=>{recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType}));});recorder.start();player.start();player.onended=()=>recorder.stop();const recording=await recorded;stream.stream.getTracks().forEach(t=>t.stop());
+  const status=await (await fetch('/voice/status')).json();
+  out.textContent='Traduciendo la frase española al inglés…';const translatedStart=performance.now();
+  const translated=await fetch('/voice/translate',{method:'POST',headers:{'Content-Type':recording.type},body:recording});if(!translated.ok||translated.status===204)throw Error('No se obtuvo traducción');
+  const english=await context.decodeAudioData(await translated.arrayBuffer());
+  out.textContent='PASS\n\nVoz española: '+source.duration.toFixed(1)+' s de audio · generación '+ttsSeconds.toFixed(1)+' s\nVoz inglesa: '+english.duration.toFixed(1)+' s de audio · traducción y síntesis '+((performance.now()-translatedStart)/1000).toFixed(1)+' s\n\nProcesamiento: local en CPU\nEntrada: '+recording.type+'\nVoz inglesa: '+(status.preservesVoice?'timbre adaptado a la voz de prueba (OpenVoice)':'sintética, sin adaptación de timbre')+'\nCaptura de micrófono: ninguna';document.body.dataset.result='pass';
+ }catch(error){out.textContent='FAIL · '+error.message;document.body.dataset.result='fail';}
+ finally{await context?.close();button.disabled=false;}
+};
+</script></html>

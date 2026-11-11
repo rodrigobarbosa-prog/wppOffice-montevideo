@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><script>const NativeAudio=window.Audio;window.Audio=function(...args){const audio=new NativeAudio(...args);audio.muted=true;return audio;};</script><base href="/"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>QA · Arrival review · Muted audio</title><link rel="stylesheet" href="style.css"><script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/addons/"}}</script></head><body>
+<canvas id="scene" aria-label="Montevideo virtual office" aria-description="Hover or tap an avatar for actions. Press F to interact with a nearby person." tabindex="-1"></canvas>
+<div id="lift-loading-preview" class="lift-loading-preview" hidden aria-hidden="true"><div class="lift-preview-light"></div><div class="lift-preview-display">↑ 14</div><div class="lift-preview-doors"></div></div>
+<header><div class="brand"><strong>WPP Production</strong><span>Montevideo, Uruguay · Floor 14</span></div><span id="view-label" class="badge">Client view</span></header>
+<div id="crosshair" hidden aria-hidden="true">·</div>
+<section id="welcome" data-mode="intro" role="dialog" aria-modal="true" aria-labelledby="welcome-title"><div class="card">
+<div class="card-top"><b>WPP Production</b><span>VIRTUAL VISIT</span></div>
+<p class="eyebrow" id="dialog-step">MONTEVIDEO, URUGUAY</p>
+<h1 id="welcome-title">Welcome to<br>our office.</h1>
+<p id="dialog-copy" class="intro">Meet the people behind your brand.<br>Your voice guide starts when you enter.</p>
+<div id="arrival-loading" class="arrival-loading" role="group" aria-label="Visit preparation"><div><span id="loading-stage">Preparing your arrival…</span><strong id="loading-percent">0%</strong></div><progress id="loading-bar" aria-label="Visit loading progress" value="0" max="100"></progress><small id="loading-detail">The office and your welcome audio will be ready before you enter.</small></div>
+<button id="enter" class="primary" disabled>Preparing your visit…</button>
+<button id="guide-toggle" class="text-button" hidden>Help</button>
+<p id="status" class="note" role="status">Loading the office…</p>
+<a id="welcome-lobby" class="text-button" href="/" hidden>Volver al lobby</a>
+</div></section>
+<div id="tour-ui" hidden>
+<p id="arrival-status" class="arrival-status" role="status" hidden></p>
+<div id="arrival-title" class="arrival-title" hidden aria-hidden="true"><span>WELCOME TO</span><strong>WPP Production</strong><small>MONTEVIDEO · FLOOR 14</small><i></i></div>
+<button id="arrival-audio-retry" class="arrival-audio-retry" hidden>Retry welcome</button>
+
+<button id="follow-toggle" class="follow-toggle">Explore office</button>
+<p id="visit-message" class="visit-message" role="status" hidden></p>
+<div class="visit-sidebar"><aside class="user-panel"><details><summary aria-label="Ajustes personales" title="Ajustes personales"><span aria-hidden="true">⚙</span></summary><div>
+<button id="mic-toggle" aria-pressed="false">Mic: off</button><small id="mic-noise-state">Noise reduction ready</small>
+<button id="captions-toggle" aria-pressed="false">Enable subtitles</button>
+<label for="camera-view">Camera</label><select id="camera-view"><option value="first">First person</option><option value="third">Third person</option></select>
+<div id="host-invites" hidden><small>Sala: <span id="admission-room"></span></small><div class="admission-invites"><button id="invite-client">Invitar cliente</button><button id="invite-brian">Invitar Brian</button></div><input id="admission-invite-link" aria-label="Enlace de invitación" readonly hidden></div><button id="screen-share" hidden>Share screen</button><small id="connection-state">Connecting visit…</small><div class="personal-tools"><button id="help">Ayuda</button><button id="pause">Pausar visita</button><a id="return-lobby" class="return-lobby" href="/" hidden>← Lobby</a></div><details id="settings"><summary aria-label="Visit options">•••</summary><div class="settings-menu"><label for="view-role">Viewing as</label><select id="view-role" aria-label="Viewing as"><option value="client">Client</option><option value="presenter">Presenter</option><option value="collaborator">Collaborator</option></select><label for="narration-language">Narration language</label><select id="narration-language" aria-label="Narration language"><option value="es">Español</option><option value="en">English</option></select><label for="narration-voice">Voice</label><select id="narration-voice" aria-label="Narration voice"><option value="">Automatic</option></select><label for="voice-volume">Volume</label><input id="voice-volume" aria-label="Narration volume" type="range" min="0" max="1" step="0.05" value="0.8"><button id="voice-replay">Replay narration</button><button id="quality">Image: detail</button><button id="reset">Back to arrival</button></div></details>
+</div></details></aside>
+<aside id="admission-panel" class="admission-notifications" aria-label="Solicitudes de ingreso" hidden><div id="admission-queue" aria-live="polite"></div></aside></div>
+<div hidden><p id="participant-client"></p><p id="participant-presenter"></p><p id="participant-collaborator"></p></div>
+<aside id="workstation-trip" class="workstation-trip" hidden><span>Walking to Brian’s desk…</span><button id="workstation-cancel">Cancel</button></aside><p id="presenter-waiting" class="visit-message" hidden>Waiting while the client visits Brian’s desk.</p>
+<section id="avatar-actions" class="avatar-actions" aria-label="Avatar actions" hidden><div><strong id="avatar-action-name"></strong><button id="avatar-actions-close" aria-label="Close avatar actions">×</button></div><button id="screen-open" hidden>View Brian’s screen</button><button id="avatar-attention">Call attention</button></section>
+
+<section id="screen-panel" class="screen-panel" aria-label="Brian’s shared screen" hidden><div><strong>Brian · Live workspace <small id="screen-status"></small></strong><button id="screen-close" aria-label="Close shared screen">×</button></div><div id="screen-waiting" class="screen-waiting"><span class="screen-initial">B</span><h2 id="screen-waiting-title">Waiting for Brian</h2><p id="screen-empty">Brian is not sharing a screen yet.</p><button id="screen-invite">Copy Brian’s invitation</button><input id="screen-invite-link" aria-label="Brian invitation link" readonly hidden></div><video id="shared-video" autoplay muted playsinline controls hidden></video></section>
+<button id="seat-action" class="seat-action" hidden>E · Sit here</button>
+<button id="door-action" class="door-action" hidden>E · Open door</button>
+<aside id="narration-panel" class="narration-panel" aria-label="Host narration" hidden><div><span id="narration-state">Voice guide</span><button id="caption-close" aria-label="Hide captions">×</button></div><p id="narration-caption" aria-live="polite"></p></aside>
+<aside class="wayfinding"><span id="location">Arrival · Floor 14</span></aside>
+<nav id="walk-controls" class="walk-controls" aria-label="Movimiento" hidden><div id="joystick" class="virtual-joystick" role="group" aria-label="Joystick de movimiento, WASD o flechas" tabindex="0" title="Arrastrá para caminar · WASD / flechas"><span class="joystick-guide" aria-hidden="true">✥</span><span class="joystick-knob" aria-hidden="true"></span></div></nav>
+<footer><div class="toolbar"><button id="role-switch" title="Temporary development control"><small>DEV</small> Switch to Presenter</button><button id="host-demo" title="Pause presenter movement and narration">Pause host</button><button id="voice-toggle" aria-pressed="true">Voice: on</button></div></footer>
+</div><script type="module" src="src/main.js"></script></body></html>
