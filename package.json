@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:avatars:textures": "node scripts/compress-avatar-textures.mjs",
     "build:presenter:mixamo": "node scripts/build-mixamo.mjs",
     "build:client:mixamo": "node scripts/build-mixamo.mjs --client",
     "build:collaborator:mixamo": "node scripts/build-mixamo.mjs --collaborator",

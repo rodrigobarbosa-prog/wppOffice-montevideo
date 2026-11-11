@@ -1,9 +1,10 @@
 import * as THREE from '../vendor/three.module.js';
+import {segmentOccluded} from './visibility-segment.js';
 export function setupSeatInteractions({canvas,camera,seats,isActive,getMotion,getPosition,onSit,onStand,solids=[],extraOcclusion=()=>false}){
  const button=document.getElementById('seat-action'),ray=new THREE.Raycaster(),pointer=new THREE.Vector2(0,0),box=new THREE.Box3(),point=new THREE.Vector3();let selected=null;
  function use(){if(!isActive())return false;if(getMotion().active){onStand();return true;}if(selected){onSit(selected);return true;}return false;}
  button.onclick=()=>{use();canvas.focus();};
- function occluded(to,id){if(extraOcclusion(camera.position,to))return true;const from=camera.position,steps=Math.ceil(from.distanceTo(to)/.08);for(let i=1;i<steps;i++){const t=i/steps,x=from.x+(to.x-from.x)*t,y=from.y+(to.y-from.y)*t,z=from.z+(to.z-from.z)*t;if(solids.some(s=>s.seatId!==id&&x>s.x1&&x<s.x2&&z>s.z1&&z<s.z2&&y>s.bottom&&y<s.top))return true;}return false;}
+ function occluded(to,id){return extraOcclusion(camera.position,to)||segmentOccluded(camera.position,to,solids,id);}
  return {get target(){return button.hidden?null:selected;},use,update(){
   if(!isActive()){selected=null;button.hidden=true;return;}
   const motion=getMotion();if(motion.active){button.hidden=false;button.disabled=motion.state.phase!=='seated';button.textContent=motion.state.phase==='standing'?'Standing up…':motion.state.phase==='sitting'?'Sitting down…':'E · Stand up';return;}

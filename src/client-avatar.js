@@ -1,8 +1,7 @@
-import {GLTFLoader} from '../vendor/addons/loaders/GLTFLoader.js';
+import {loadAvatarAsset} from './avatar-assets.js';
 import {buildMixamoPresenter} from './mixamo-presenter.js';
-import {avatarAsset} from './render-profile.js';
 
-export async function createClientAvatar(scene){
- const gltf=await new GLTFLoader().loadAsync(avatarAsset(new URL('../assets/avatars/client/client.glb',import.meta.url)));
- return buildMixamoPresenter(scene,gltf,{client:true});
+export async function createClientAvatar(scene,options={}){
+ const gltf=await loadAvatarAsset(new URL('../assets/avatars/client/client.glb',import.meta.url));
+ return buildMixamoPresenter(scene,gltf,{...options,client:true});
 }

@@ -1,0 +1,10 @@
+import {registerHooks} from 'node:module';import {readFile,writeFile} from 'node:fs/promises';import {performance} from 'node:perf_hooks';
+registerHooks({resolve(s,c,next){return s==='three'?{url:new URL('../vendor/three.module.js',import.meta.url).href,shortCircuit:true}:next(s,c);}});
+const T=await import('../vendor/three.module.js'),{GLTFLoader}=await import('../vendor/addons/loaders/GLTFLoader.js'),{buildMixamoPresenter}=await import('../src/mixamo-presenter.js'),{avatarTargetBounds}=await import('../src/avatar-interactions.js');
+globalThis.ProgressEvent=class{constructor(type,data){Object.assign(this,{type},data);}};
+const binary=await readFile('assets/avatars/mixamo/presenter.glb'),size=binary.readUInt32LE(12),json=JSON.parse(binary.subarray(20,20+size));delete json.images;delete json.textures;delete json.samplers;for(const m of json.materials){delete m.normalTexture;delete m.pbrMetallicRoughness.baseColorTexture;}json.buffers[0].uri='data:application/octet-stream;base64,'+binary.subarray(28+size).toString('base64');
+const gltf=await new GLTFLoader().parseAsync(JSON.stringify(json),''),avatar=buildMixamoPresenter(new T.Scene(),gltf);avatar.userData.animate(.1);avatar.updateMatrixWorld(true);avatar.traverse(o=>{if(o.isSkinnedMesh)o.skeleton.update();});
+const ray=new T.Raycaster(new T.Vector3(0,1.2,3),new T.Vector3(0,0,-1)),box=new T.Box3(),point=new T.Vector3();
+function time(fn,n){const t=performance.now();for(let i=0;i<n;i++)fn();return (performance.now()-t)/n;}
+const old=()=>ray.intersectObject(avatar,true).find(h=>h.object.isSkinnedMesh),proxy=()=>ray.ray.intersectBox(avatarTargetBounds(avatar,box),point);if(!old()||!proxy())throw Error('Both paths must hit the visible torso');time(old,10);time(proxy,100);
+const result={method:'Node CPU microbenchmark, same real presenter torso hit; excludes GPU/network',triangleRaycastMs:time(old,100),bodyProxyMs:time(proxy,10000)};await writeFile('artifacts/picking-performance.json',JSON.stringify(result,null,2));console.log(result);

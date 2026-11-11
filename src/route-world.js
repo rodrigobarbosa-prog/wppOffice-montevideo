@@ -12,6 +12,7 @@ import {buildKitchen} from './kitchen.js';
 import {buildArrivalDetails} from './arrival-details.js';
 import {buildEntryDoor} from './entry-door.js';
 import {buildArrivalLift} from './arrival-lift.js';
+import {partitionProfile,partitionSpans} from './partition-panels.js';
 
 // Metres. Spatial sequence follows references 01–10; dimensions are estimates.
 export const routeStops=[
@@ -185,7 +186,7 @@ export async function buildRouteWorld(scene){
   for(let i=0;i<uv.count;i++)uv.setXY(i,(z+positions.getZ(i)-partition.z1)/(partition.z2-partition.z1),(y+positions.getY(i))/2.85);
   uv.needsUpdate=true;return mesh;
  }
- frameBox(.65,2.85,.65,partition.x,1.425,-2.4);
+ frameBox(partitionProfile.columnSize,2.85,partitionProfile.columnSize,partition.x,1.425,partitionProfile.columnZ);
  const columnArtwork=map((c,w,h)=>{
   c.fillStyle='#eeeee3';c.fillRect(0,0,w,h);
   const g=c.createLinearGradient(w*.15,h*.1,w*.85,h*.7);g.addColorStop(0,'#c94389');g.addColorStop(.28,'#dc597e');g.addColorStop(.49,'#e4b663');g.addColorStop(.64,'#eee6b3');g.addColorStop(.83,'#d27c9f');g.addColorStop(1,'#bf4790');
@@ -204,15 +205,21 @@ export async function buildRouteWorld(scene){
  const mottoMesh=new THREE.Mesh(new THREE.PlaneGeometry(serviceWall.mottoWidth,1.75),new THREE.MeshBasicMaterial({map:motto,transparent:true}));mottoMesh.position.set(serviceWall.mottoX,1.55,-.151);mottoMesh.rotation.y=Math.PI;group.add(mottoMesh);
  box(.32,.16,.045,serviceWall.mottoX,2.52,-.17,white);label('← SALIDA',.29,.12,serviceWall.mottoX,2.52,-.197,Math.PI,'#287852','#ffffff',330);
  // Photo 07 is a LEFT camera turn. Original partition parallels the long desks.
- const partitionLength=partition.z2-partition.z1,partitionZ=(partition.z1+partition.z2)/2;
- frameBox(.10,.66,partitionLength,partition.x,.33,partitionZ);
- box(.025,1.65,partitionLength,partition.x,1.485,partitionZ,frosted,true);
- frameBox(.13,.55,partitionLength,partition.x,2.575,partitionZ);
- frameBox(.13,2.85,.08,partition.x,1.425,partition.z1);
- for(let z=partition.z1;z<=partition.z2;z+=.43){
-  for(const side of [-1,1])box(.018,1.65,.018,partition.x+side*.026,1.485,z,mat('#8db8b9',{metalness:.5,roughness:.32}));
+ const partitionZ=(partition.z1+partition.z2)/2;
+ const panelSpans=partitionSpans(partition),profile=partitionProfile,glassHeight=profile.glassTop-profile.glassBottom,glassY=(profile.glassTop+profile.glassBottom)/2;
+ frameBox(profile.frameWidth,2.85,profile.endPostDepth,partition.x,1.425,partition.z1);
+ for(const span of panelSpans){
+  // Butt against the end post / column, rather than burying complete beams in
+  // them: their shared top faces otherwise fight after static batching.
+  frameBox(.10,.66,span.length,partition.x,.33,span.center);
+  box(.025,glassHeight,span.length,partition.x,glassY,span.center,frosted,true);
+  frameBox(profile.frameWidth,.55,span.length,partition.x,2.575,span.center);
+  for(const y of [profile.glassBottom,profile.glassTop])box(profile.railWidth,.04,span.length,partition.x,y,span.center,trim);
  }
- for(const y of [.66,2.31])box(.06,.04,partitionLength,partition.x+.035,y,partitionZ,trim);
+ for(let z=partition.z1+.43;z<=partition.z2;z+=.43){
+  if(!panelSpans.some(span=>z-.009>=span.z1&&z+.009<=span.z2))continue;
+  for(const side of [-1,1])box(.018,glassHeight,.018,partition.x+side*.026,glassY,z,mat('#8db8b9',{metalness:.5,roughness:.32}));
+ }
  const logoSource=await new THREE.TextureLoader().loadAsync('/assets/references/13-mampara-frontal.jpg');
  const logo=map((c,w,h)=>{
   const img=logoSource.image;
@@ -231,7 +238,7 @@ export async function buildRouteWorld(scene){
   }
   c.putImageData(pixels,0,0);
  },2048,384);logoSource.dispose();
- const logoMat=new THREE.MeshBasicMaterial({map:logo,transparent:true,alphaTest:.12,side:THREE.DoubleSide});
+ const logoMat=new THREE.MeshBasicMaterial({map:logo,transparent:true,alphaTest:.12,side:THREE.FrontSide,depthWrite:false});
  for(const side of [-1,1]){
   const logoMesh=new THREE.Mesh(new THREE.PlaneGeometry(6.8,.83),logoMat);logoMesh.position.set(partition.x+side*.057,1.76,partitionZ);logoMesh.rotation.y=side*Math.PI/2;group.add(logoMesh);
  }

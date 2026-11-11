@@ -4,8 +4,8 @@ import {applyAttentionGesture} from './attention-gesture.js';
 import {renderProfile} from './render-profile.js';
 
 // Keep the downloaded character's authored clothing, hair geometry and texture colors.
-export function buildMixamoPresenter(scene,gltf,{client=false}={}){
- const root=new THREE.Group();root.name=client?'Client · Passive Marker Man':'Presenter · Leonard';
+export function buildMixamoPresenter(scene,gltf,{client=false,root=new THREE.Group()}={}){
+ root.name=client?'Client · Passive Marker Man':'Presenter · Leonard';
  const visual=new THREE.Group(),model=gltf.scene;visual.add(model);root.add(visual);
  model.updateMatrixWorld(true);
  const box=new THREE.Box3().setFromObject(model),scale=1.8/(box.max.y-box.min.y);
@@ -30,7 +30,7 @@ export function buildMixamoPresenter(scene,gltf,{client=false}={}){
  const mixer=new THREE.AnimationMixer(model),actions=Object.fromEntries(gltf.animations.map(clip=>[clip.name,mixer.clipAction(clip)]));
  for(const name of ['idle','walk','welcome','explain'])if(!actions[name])throw new Error('Missing presenter animation: '+name);
  actions.welcome.setLoop(THREE.LoopOnce,1);actions.welcome.clampWhenFinished=true;
- let current='idle',heading=0,phase=0,headYaw=0;
+ let current='idle',heading=root.rotation.y,phase=0,headYaw=0;
  actions.idle.play();mixer.update(0);
  let head;model.traverse(o=>{if(o.isBone&&/^mixamorig\d*Head$/.test(o.name))head=o;});
  const axisY=new THREE.Vector3(0,1,0),world=new THREE.Quaternion(),parentWorld=new THREE.Quaternion(),turn=new THREE.Quaternion();

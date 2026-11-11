@@ -3,12 +3,13 @@ import {createVisitMedia} from './visit-media.js';
 import {createVisitSession} from './visit-session.js';
 import {inviteUrl} from './lobby-model.js';
 import {participantReturnUrl} from './client-entry-model.js';
+import {createRemoteMotion} from './remote-motion.js';
 
 export function setupVisitControls({scene,onExplore,onAttention,onScreenVisit=()=>false}){
  const $=id=>document.getElementById(id),labels={client:'Client',presenter:'Presenter',collaborator:'Brian · Collaborator'};
- let waitingCount=0;
+ let waitingCount=0,stateSequence=0;
  let screenVisit='idle',role='client',following=true,mediaState={mic:false,sharing:false},pose={},localScreen=null,activeScreen=null,screenTexture=null;
- const remotes=new Map(),remoteScreens=new Map(),screenMeshes=[];
+ const remotes=new Map(),remoteScreens=new Map(),screenMeshes=[],remoteMotion=createRemoteMotion();
  const params=new URL(location.href).searchParams,joined=params.get('joined')==='1',displayName=(params.get('name')||'').slice(0,40),room=params.get('room')||'office';
  let rejected=false,admitted=!joined||params.get('modo')==='presenter';
  scene.traverse(o=>{if(o.isMesh&&o.userData.collaboratorScreen)screenMeshes.push({mesh:o,material:o.material});});
@@ -21,7 +22,7 @@ export function setupVisitControls({scene,onExplore,onAttention,onScreenVisit=()
   }else{screenTexture?.dispose();screenTexture=null;for(const {mesh,material} of screenMeshes){mesh.material.dispose();mesh.material=material;}}
   update();
  }
- function publish(){session.publish({screenVisit,role,name:displayName,mic:mediaState.mic,sharing:mediaState.sharing,joined,...pose});}
+ function publish(){session.publish({screenVisit,role,name:displayName,mic:mediaState.mic,sharing:mediaState.sharing,joined,...pose,sequence:++stateSequence});}
  function update(){
   $('admission-panel').hidden=role!=='presenter'||!waitingCount;$('host-invites').hidden=role!=='presenter';
   $('mic-toggle').textContent=mediaState.micPending?'Mic: connecting…':mediaState.mic?'Mic: on':'Mic: off';
@@ -45,7 +46,7 @@ export function setupVisitControls({scene,onExplore,onAttention,onScreenVisit=()
  }
  const session=createVisitSession({
   onStatus:text=>{$('connection-state').textContent=text;},
-  onState:(data,id)=>{if(!data){remotes.delete(id);remoteScreens.delete(id);attachScreen();return;}if(!Object.hasOwn(labels,data.role))return;remotes.set(id,{...data,received:Date.now()});attachScreen();},
+  onState:(data,id)=>{if(!data){remotes.delete(id);remoteMotion.remove(id);remoteScreens.delete(id);attachScreen();return;}if(!Object.hasOwn(labels,data.role))return;if(Number.isFinite(data.sequence)&&Number.isFinite(remotes.get(id)?.sequence)&&data.sequence<=remotes.get(id).sequence)return;remotes.set(id,{...data,received:Date.now()});remoteMotion.push(id,data,performance.now());attachScreen();},
   onAdmission:allowed=>{admitted=allowed;$('enter').disabled=!allowed;$('status').textContent=allowed?'El presentador te admitió. Ya podés entrar.':'Esperando que el presentador admita tu ingreso…';$('enter').textContent=allowed?'Start visit':'Esperando admisión…';},
   onWaiting:queue=>{waitingCount=queue.length;const panel=$('admission-panel'),list=$('admission-queue');panel.hidden=role!=='presenter'||!waitingCount;list.replaceChildren();for(const guest of queue){const card=document.createElement('div'),title=document.createElement('strong'),copy=document.createElement('p'),button=document.createElement('button');card.className='admission-notice';title.textContent=guest.name;copy.textContent='Solicita entrar a la visita';button.textContent='Aceptar';button.setAttribute('aria-label','Aceptar ingreso de '+guest.name);button.onclick=()=>{button.disabled=true;button.textContent='Aceptando…';session.admit(guest.id);};card.append(title,copy,button);list.append(card);}},
   onRejected:reason=>{rejected=true;media.destroy();if(new URL(location.href).searchParams.get('modo')==='client'){$('enter').disabled=true;$('status').textContent='Volvé a tu invitación para solicitar ingreso nuevamente.';$('welcome-title').textContent='Tu visita estará lista en un momento';$('welcome').hidden=false;$('tour-ui').hidden=true;return;}$('enter').disabled=true;$('status').textContent=reason==='host-required'?'El presentador debe iniciar la visita. Volvé al lobby para solicitar ingreso.':'This role is already occupied in the room. Return to the lobby and choose an available role.';$('welcome-title').textContent=reason==='host-required'?'El presentador debe estar conectado':'Role already connected';$('welcome').hidden=false;$('tour-ui').hidden=true;$('connection-state').textContent='Role already occupied';},
@@ -83,7 +84,7 @@ export function setupVisitControls({scene,onExplore,onAttention,onScreenVisit=()
  update();
  return {interact,arriveScreen:showScreen,screenPhase:()=>screenVisit,waitForClient(value,message){$('presenter-waiting').hidden=role!=='presenter'||!value;if(message)$('presenter-waiting').textContent=message;},setRole(next){role=next;media.setRole(next);update();publish();},unlock(){session.unlock();},
   publishPose(next){pose=next;publish();},
-  remotePose(name){const peer=[...remotes.values()].find(p=>p.role===name);return peer&&Number.isFinite(peer.x)&&Number.isFinite(peer.z)&&Math.abs(peer.x)<100&&Math.abs(peer.z)<100?{...peer,heading:Number.isFinite(peer.heading)?peer.heading:0,speed:Number.isFinite(peer.speed)?Math.min(3,Math.max(0,peer.speed)):0,gesture:['idle','walk','welcome','explain'].includes(peer.gesture)?peer.gesture:'idle'}:null;},
+  remotePose(name){const entry=[...remotes].find(([,p])=>p.role===name),peer=entry&&remoteMotion.sample(entry[0],performance.now());return peer&&Number.isFinite(peer.x)&&Number.isFinite(peer.z)&&Math.abs(peer.x)<100&&Math.abs(peer.z)<100?{...peer,heading:Number.isFinite(peer.heading)?peer.heading:0,speed:Number.isFinite(peer.speed)?Math.min(3,Math.max(0,peer.speed)):0,gesture:['idle','walk','welcome','explain'].includes(peer.gesture)?peer.gesture:'idle'}:null;},
   setFollowing(next){following=next;update();},state(){return {following,role,mic:mediaState.mic,sharing:Boolean(activeScreen)};}
   ,hasPeer(name){return [...remotes.values()].some(p=>p.role===name);},rejected(){return rejected||!admitted;}
  };

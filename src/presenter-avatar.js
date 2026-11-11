@@ -2,12 +2,12 @@ import * as THREE from '../vendor/three.module.js';
 import {GLTFLoader} from '../vendor/addons/loaders/GLTFLoader.js';
 import {preparePresenterIdentity,identityMaterial,addPresenterBeard} from './presenter-identity.js';
 import {buildMixamoPresenter} from './mixamo-presenter.js';
-import {avatarAsset} from './render-profile.js';
+import {loadAvatarAsset} from './avatar-assets.js';
 
 const assetRoot=new URL('../assets/avatars/rocketbox/',import.meta.url);
-export async function createPresenterAvatar(scene){
- const gltf=await new GLTFLoader().loadAsync(avatarAsset(new URL('../assets/avatars/mixamo/presenter.glb',import.meta.url)));
- return buildMixamoPresenter(scene,gltf);
+export async function createPresenterAvatar(scene,options={}){
+ const gltf=await loadAvatarAsset(new URL('../assets/avatars/mixamo/presenter.glb',import.meta.url));
+ return buildMixamoPresenter(scene,gltf,options);
 }
 
 // Previous asset retained for comparison and existing regression coverage.

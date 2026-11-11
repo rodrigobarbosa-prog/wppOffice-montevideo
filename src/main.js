@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import {renderProfile} from './render-profile.js';
+import {createCameraLook} from './camera-look.js';
+import {configureAvatarAssets} from './avatar-assets.js';
+import {createProgressiveAvatars,prepareAvatar} from './progressive-avatars.js';
+import {createShadowRefresh} from './shadow-refresh.js';
+import {createPoseRate} from './pose-rate.js';
 import {createSeatMotion} from './seating.js';
 import {createFollowSeating} from './follow-seating.js';
 import {presenterWaitState} from './presenter-wait.js';
@@ -28,6 +33,7 @@ import {partition,serviceWall,kitchen,officeWest,meetingRooms,officeShiftZ,colla
 const $=id=>document.getElementById(id),canvas=$('scene'),keys=new Set();
 let renderer,world,camera,yaw=0,pitch=0,dragging=false,high=!renderProfile.mobile;
 let lookPointer=null,lastLookX=0,lastLookY=0;
+const cameraLook=createCameraLook();
 const eyeHeight=1.68,radius=.24;
 const joystick=setupJoystick($('joystick'));
 const connectedVisit=new URL(location.href).searchParams.get('joined')==='1';
@@ -45,10 +51,14 @@ try{
  renderer.setPixelRatio(Math.min(devicePixelRatio,renderProfile.mobile?1:1.25));renderer.setSize(innerWidth,innerHeight);canvas.dataset.graphicsProfile=renderProfile.mobile?'mobile':'desktop';
  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+ const avatarAssets=configureAvatarAssets(renderer,{original:new URL(location.href).searchParams.get('textures')==='original'});
+ window.addEventListener('pagehide',()=>avatarAssets.dispose(),{once:true});
+ canvas.dataset.avatarTextures=avatarAssets.compressed?'uastc':'original';
+ canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();renderer.setAnimationLoop(null);fail(new Error('Graphics context lost. Please reload the visit.'));});
  const scene=new THREE.Scene();scene.background=new THREE.Color('#c5dce6');scene.fog=new THREE.Fog('#c5dce6',350,1800);
  camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.08,2800);camera.rotation.order='YXZ';
  loading.set('office',0,'Loading the office…');world=await buildRouteWorld(scene);loading.set('office',1,'Office ready');loadStage='lighting';loading.set('lighting',0,'Preparing lighting and reflections…');
- if(loadingInLift){camera.position.set(liftArrival.client.x,eyeHeight,liftArrival.client.z);camera.rotation.set(liftArrival.client.pitch,liftArrival.client.yaw,0);world.arrivalLift.set(0,10);renderer.render(scene,camera);$('lift-loading-preview').hidden=true;canvas.dataset.loadingPreview='live';renderer.setAnimationLoop(()=>renderer.render(scene,camera));}
+ if(loadingInLift){camera.position.set(liftArrival.client.x,eyeHeight,liftArrival.client.z);camera.rotation.set(liftArrival.client.pitch,liftArrival.client.yaw,0);world.arrivalLift.set(0,10);renderer.render(scene,camera);$('lift-loading-preview').hidden=true;canvas.dataset.loadingPreview='live';}
  const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(renderer),env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.55;room.dispose();
  // Bake one reflection probe of this actual static office for metals, glass and varnish.
  if(renderProfile.reflectionProbe){const reflectionTarget=new THREE.WebGLCubeRenderTarget(128,{type:THREE.HalfFloatType});
@@ -56,12 +66,20 @@ try{
  const officeEnvironment=pmrem.fromCubemap(reflectionTarget.texture);scene.environment=officeEnvironment.texture;scene.environmentIntensity=.7;
  env.dispose();reflectionTarget.dispose();}pmrem.dispose();
  loading.set('lighting',1,'Lighting ready');loadStage='people';loading.set('people',0,'Loading your presenter and visitors…');
- const visuals=createVisuals(renderer,scene,camera,()=>{high=false;$('quality').textContent='Image: smooth';});
- // Serialize decoding on mobile to cap transient image/GLB memory peaks.
- const [presenterAvatar,clientAvatar,collaboratorAvatar]=renderProfile.mobile?[await createPresenterAvatar(scene),await createClientAvatar(scene),await createCollaboratorAvatar(scene)]:await Promise.all([createPresenterAvatar(scene),createClientAvatar(scene),createCollaboratorAvatar(scene)]);
+ const visuals=createVisuals(renderer,scene,camera,(mode='smooth')=>{high=mode!=='smooth';$('quality').textContent='Image: '+mode;});
+ // One model and one transcoder worker at a time, including desktop. Brian is
+ // prepared after the welcome assets rather than blocking the arrival screen.
+ const avatars=createProgressiveAvatars({scene,factories:{presenter:createPresenterAvatar,client:createClientAvatar,collaborator:createCollaboratorAvatar},prepare:root=>prepareAvatar(renderer,root,scene,camera),onState:(person,state)=>{canvas.dataset[person+'Asset']=state;if(state==='ready')renderer.shadowMap.needsUpdate=true;}});
+ const {presenter:presenterAvatar,client:clientAvatar,collaborator:collaboratorAvatar}=avatars.people;
+ collaboratorAvatar.position.set(collaboratorStation.x,0,collaboratorStation.z);collaboratorAvatar.userData.seated=1;collaboratorAvatar.userData.face(collaboratorStation.yaw);
+ await avatars.essentials(new URL(location.href).searchParams.get('modo')||'client');
+ loading.set('people',.98,'Preparing the scene for a smooth entrance…');
+ await renderer.compileAsync(scene,camera);
  loading.set('people',1,'People ready');loadStage='welcome';loading.set('welcome',0,'Loading the English welcome…');
  if(needsArrivalVoice){arrivalAudio=createArrivalVoice({onProgress:fraction=>loading.set('welcome',fraction,'Preparing your English welcome…')});window.addEventListener('pagehide',()=>arrivalAudio.destroy(),{once:true});await arrivalAudio.load();}
  loading.set('welcome',1,'Ready to begin');$('loading-detail').textContent=needsArrivalVoice?'Office, people and English welcome are ready.':'Your office and people are ready.';
+ // Begin in the next task so setup and the entry UI can finish first.
+ setTimeout(()=>{void avatars.background();},250);
  const follower=createClientFollower();let visitControls,following=true,clientSpeed=0,presenterSpeed=0,lastManualLook=0,aimedDoor=false;
  const people={client:clientAvatar,presenter:presenterAvatar,collaborator:collaboratorAvatar};
  const attentionRings=[];
@@ -190,6 +208,7 @@ try{
  function switchRole(next){
   if(connectedVisit&&next!==requestedRole)return;
   if(!visitRoles.includes(next)||next===role)return;
+  if(!people[next].userData.ready){void avatars.ensure(next).then(()=>switchRole(next)).catch(()=>{$('status').textContent='Character unavailable. Please try again.';});return;}
   const current={x:camera.position.x,z:camera.position.z,yaw,pitch};
   let destination;
   if(next==='collaborator')destination={x:collaboratorAvatar.position.x,z:collaboratorAvatar.position.z,yaw:collaboratorAvatar.rotation.y-Math.PI,pitch:-.10};
@@ -252,8 +271,9 @@ try{
   }
   enter.focus();
  }
- function stopLooking(){
+ function stopLooking({settle=false}={}){
   const pointer=lookPointer;lookPointer=null;dragging=false;canvas.style.cursor='grab';
+  if(!settle)cameraLook.reset();
   if(pointer!==null&&canvas.hasPointerCapture(pointer))canvas.releasePointerCapture(pointer);
  }
  function pause(){if(hasStarted&&$('welcome').hidden)showDialog('pause');}
@@ -282,28 +302,29 @@ try{
  canvas.style.touchAction='none';
  canvas.addEventListener('pointerdown',e=>{
   if(!$('welcome').hidden||e.button!==0||lookPointer!==null)return;
+  cameraLook.reset();
   e.preventDefault();canvas.focus({preventScroll:true});dragging=true;lookPointer=e.pointerId;lastLookX=e.clientX;lastLookY=e.clientY;
   canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';
  });
  canvas.addEventListener('pointermove',e=>{
   if(!dragging||e.pointerId!==lookPointer||!$('welcome').hidden)return;
   const dx=e.clientX-lastLookX,dy=e.clientY-lastLookY;lastLookX=e.clientX;lastLookY=e.clientY;
-  yaw-=dx*.003;pitch=THREE.MathUtils.clamp(pitch-dy*.003,-1.35,1.35);camera.rotation.set(pitch,yaw,0);lastManualLook=performance.now();if(role==='client'&&arrivalIntro.active)arrivalLookManual=true;
+  cameraLook.input(dx,dy,e.pointerType);lastManualLook=performance.now();if(role==='client'&&arrivalIntro.active)arrivalLookManual=true;
  });
- for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,e=>{if(e.pointerId===lookPointer)stopLooking();});
+ for(const event of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(event,e=>{if(e.pointerId===lookPointer)stopLooking({settle:event==='pointerup'});});
  document.addEventListener('visibilitychange',()=>{if(document.hidden)movementKeyboard.release();else if(!$('settings').open)movementKeyboard.regain();});
  $('reset').onclick=()=>{const previousRole=role;clientPose={...world.spawn};collaboratorPose=null;role='client';clientView();if(previousRole!=='client')switchRole(previousRole);updateRole();keys.clear();$('settings').open=false;canvas.focus();};
  $('quality').textContent=high?'Image: detail':'Image: smooth';
  $('quality').title='Switch image quality';
  $('quality').onclick=()=>{high=visuals.quality(!high);$('quality').textContent=high?'Image: detail':'Image: smooth';};
  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);visuals.resize();});
- canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();pause();fail(new Error('Graphics interrupted. Please reload.'));});
  let previous=performance.now(),lastPublish=0;
- const renderTimes=[];renderer.info.autoReset=false;
+ const renderTimes=[],shadowRefresh=createShadowRefresh(),poseRate=createPoseRate();renderer.info.autoReset=false;
  renderer.setAnimationLoop(now=>{
   canvas.dataset.frameMs=(now-previous).toFixed(1);
   const elapsed=(now-previous)/1000,dt=Math.min(elapsed,.12);previous=now;
   const active=$('welcome').hidden;
+  if(active&&$('screen-panel').hidden){const look=cameraLook.update(yaw,pitch,elapsed);if(look.changed){yaw=look.yaw;pitch=look.pitch;camera.rotation.set(pitch,yaw,0);}}else cameraLook.reset();
   const remotePresenter=visitControls.remotePose('presenter'),remoteClient=visitControls.remotePose('client'),remoteCollaborator=visitControls.remotePose('collaborator');
   const presenterSeat=remotePresenter?remotePresenter.seat?.id:seatMotions.presenter.state?.phase!=='standing'?seatMotions.presenter.state?.seat.id:null;
   const introRunning=role==='client'&&!previewOffice&&arrivalIntro.active;
@@ -334,7 +355,7 @@ try{
   if(presenterAvatar.visible)occupants.push({x:presenterAvatar.position.x,z:presenterAvatar.position.z,radius:.30});
   if(clientAvatar.visible)occupants.push({x:clientAvatar.position.x,z:clientAvatar.position.z,radius:.30});
   if(collaboratorAvatar.visible)occupants.push({x:collaboratorAvatar.position.x,z:collaboratorAvatar.position.z,radius:.30});
-  if(connectedVisit&&role!=='presenter'&&remotePresenter?.door){world.entryDoor.applyRemote(remotePresenter.door);renderer.shadowMap.needsUpdate=true;}
+  if(connectedVisit&&role!=='presenter'&&remotePresenter?.door){const before=world.entryDoor.angle;world.entryDoor.applyRemote(remotePresenter.door);if(Math.abs(before-world.entryDoor.angle)>.0001)renderer.shadowMap.needsUpdate=true;}
   if(active&&(!connectedVisit||role==='presenter')&&world.entryDoor.update(dt,occupants))renderer.shadowMap.needsUpdate=true;
   const doorNear=active&&!seatMotions[role].active&&(!connectedVisit||role==='presenter')&&world.entryDoor.canInteract(camera.position.x,camera.position.z,yaw);
   $('door-action').hidden=!doorNear;
@@ -412,7 +433,7 @@ try{
   clientPose={x:clientAvatar.position.x,z:clientAvatar.position.z,yaw:role==='client'?yaw:clientAvatar.rotation.y-Math.PI,pitch:role==='client'?pitch:-.04};
   if(active){const acting=clientAvatar.userData.actionUntil>now;if(acting){clientSpeed=0;const target=people[clientAvatar.userData.actionTarget];if(target)clientAvatar.userData.face(Math.atan2(target.position.x-clientAvatar.position.x,target.position.z-clientAvatar.position.z));}clientAvatar.userData.animate(dt,{speed:clientSpeed,gesture:'idle',lookAt:people[clientAvatar.userData.actionTarget]?.position||presenterAvatar.position});collaboratorAvatar.userData.animate(dt,{speed:collaboratorSpeed,lookAt:collaboratorAvatar.userData.attentionUntil>now?people[collaboratorAvatar.userData.attentionFrom]?.position:null});}
   for(const item of attentionRings){item.ring.visible=item.until>now;item.ring.material.opacity=.45+.4*Math.sin(now*.009)**2;}
-  if(now-lastPublish>180){const actor=people[role];visitControls.publishPose({arriving:role==='client'&&!previewOffice&&arrivalIntro.active,arrivalDoor:role==='client'?arrivalDoor:undefined,x:actor.position.x,z:actor.position.z,heading:actor.rotation.y,...(role==='presenter'?{door:{angle:world.entryDoor.angle,open:world.entryDoor.targetOpen,obstructed:world.entryDoor.obstructed}}:{}),seat:{id:actor.userData.seatId||null,weight:actor.userData.seated||0},speed:role==='client'?clientSpeed:role==='presenter'?presenterSpeed:collaboratorSpeed,gesture:actor.userData.animation?.gesture||'idle'});lastPublish=now;}
+  if(now-lastPublish>100){const actor=people[role],pose={arriving:role==='client'&&!previewOffice&&arrivalIntro.active,arrivalDoor:role==='client'?arrivalDoor:undefined,x:actor.position.x,z:actor.position.z,heading:actor.rotation.y,...(role==='presenter'?{door:{angle:world.entryDoor.angle,open:world.entryDoor.targetOpen,obstructed:world.entryDoor.obstructed}}:{}),seat:{id:actor.userData.seatId||null,weight:actor.userData.seated||0},speed:role==='client'?clientSpeed:role==='presenter'?presenterSpeed:collaboratorSpeed,gesture:actor.userData.animation?.gesture||'idle'};if(poseRate.shouldSend(now,pose))visitControls.publishPose(pose);lastPublish=now;}
   canvas.dataset.following=String(following);canvas.dataset.clientSpeed=clientSpeed.toFixed(3);canvas.dataset.collaboratorVisible=String(collaboratorAvatar.visible);canvas.dataset.collaboratorSeated=String(collaboratorAvatar.userData.seated||0);
   canvas.dataset.clientAvatarVisible=String(clientAvatar.visible);
   canvas.dataset.clientPosition=[clientAvatar.position.x,clientAvatar.position.z].map(v=>v.toFixed(3)).join(',');
@@ -420,7 +441,8 @@ try{
   canvas.dataset.seated=String(people[role].userData.seated||0);canvas.dataset.seatId=people[role].userData.seatId||'';
   canvas.dataset.presenterDistance=Math.hypot(camera.position.x-presenterAvatar.position.x,camera.position.z-presenterAvatar.position.z).toFixed(2);
   // The office is static, but the articulated host needs fresh light shadows.
-  renderer.shadowMap.autoUpdate=active&&(clientAvatar.visible||(presenterAvatar.visible&&hostPlaying));
+  renderer.shadowMap.autoUpdate=false;
+  if(active&&shadowRefresh.update(now,Object.values(people)))renderer.shadowMap.needsUpdate=true;
   if(canvas.dataset.avatarVisible!==String(presenterAvatar.visible))renderer.shadowMap.needsUpdate=true;
   canvas.dataset.look=[yaw,pitch].map(v=>v.toFixed(3)).join(',');
   const locationName=world.locationAt(role==='client'&&presenterAvatar.visible?presenterAvatar.position.x:camera.position.x,role==='client'&&presenterAvatar.visible?presenterAvatar.position.z:camera.position.z);
@@ -435,7 +457,7 @@ try{
   for(const [person,avatar] of Object.entries(people))avatar.userData.mirrorSelf=person===role&&cameraView==='first';
   if(cameraView==='third'&&!introRunning){const view=thirdPersonPosition(self.position,yaw,(x,z)=>blocked(x,z,self.userData.seatId)),target=new THREE.Vector3(view.x,view.y,view.z);if(!thirdPersonCamera)thirdPersonCamera=target.clone();else{const next=thirdPersonCamera.clone().lerp(target,1-Math.exp(-dt*6));thirdPersonCamera.copy(blocked(next.x,next.z,self.userData.seatId)?target:next);}camera.position.copy(thirdPersonCamera);camera.lookAt(self.position.x,1.2,self.position.z);self.visible=Math.hypot(camera.position.x-self.position.x,camera.position.z-self.position.z)>.65;}else thirdPersonCamera=null;
   camera.updateMatrixWorld();avatarInteractions.update(now);seatInteractions.update();aimedDoor=doorNear&&!avatarInteractions.target&&!seatInteractions.target&&world.entryDoor.aimedAt(camera);$('door-action').hidden=!aimedDoor;$('crosshair').classList.toggle('has-action',Boolean(avatarInteractions.target||seatInteractions.target||aimedDoor));canvas.dataset.actionTarget=avatarInteractions.target||seatInteractions.target?.id||'';canvas.dataset.cameraView=cameraView;canvas.dataset.clientGesture=clientAvatar.userData.animation?.gesture||'idle';
-  renderer.info.reset();const renderStart=performance.now();visuals.render(dt);
+  visuals.observeFrame?.(elapsed,active);renderer.info.reset();const renderStart=performance.now();visuals.render(dt);
   camera.position.copy(savedCameraPosition);camera.quaternion.copy(savedCameraQuaternion);camera.updateMatrixWorld();self.visible=selfVisible;
   renderTimes.push(performance.now()-renderStart);if(renderTimes.length>60)renderTimes.shift();
   // CPU submission time excludes hidden-tab throttling; it is not a GPU FPS estimate.

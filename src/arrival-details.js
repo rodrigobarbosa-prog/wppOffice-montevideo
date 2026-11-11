@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import {Reflector} from 'three/addons/objects/Reflector.js';
 import {renderProfile} from './render-profile.js';
+import {registerPlanarReflection} from './planar-reflections.js';
 import {arrival,entryBrandWall,entryVestibule} from './arrival-layout.js';
 
 export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,label,white,steel,black,finish,glow,brandMat,solids,plant}){
  const wood=finish.wood,chrome=mat('#c9cbc9',{metalness:1,roughness:.17});
  const liftSteel=steel.clone();liftSteel.roughness=.72;liftSteel.bumpScale=.00004;
  const jamb=mat('#8d9392',{metalness:.8,roughness:.28});
- const mirrorObjects=[];let reflecting=false;
+ const mirrorObjects=[];
  // Closed facade details project into the hall. Keep the open office entry clear.
  for(const [x1,x2] of [[-2,-.95],[.95,9]])solids.push({x1,x2,z1:2.42,z2:2.61,bottom:0,top:2.55});
  for(const [x1,x2] of [[-2,5.8],[8.1,9]])solids.push({x1,x2,z1:0,z2:.17,bottom:0,top:2.55});
@@ -64,11 +65,7 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
   const z=spec.side==='far'?2.491:.151,rotation=spec.side==='far'?Math.PI:0;
   const mirror=new Reflector(new THREE.PlaneGeometry(spec.width,2.37),{color:0xf0f0eb,textureWidth:renderProfile.mirrorWidth,textureHeight:renderProfile.mobile?256:1024,clipBias:.003,multisample:renderProfile.mirrorSamples});
   mirror.position.set(spec.x,1.205,z);mirror.rotation.y=rotation;
-  const draw=mirror.onBeforeRender;
-  mirror.onBeforeRender=function(renderer,s,camera,...args){
-   if(reflecting||s.overrideMaterial||(renderProfile.mobile&&camera.position.distanceTo(this.position)>6))return;
-   reflecting=true;try{draw.call(this,renderer,s,camera,...args);}finally{reflecting=false;}
-  };
+  registerPlanarReflection(scene,mirror,{mobile:renderProfile.mobile,maxDistance:renderProfile.mobile?6:14});
   mirror.name='Hall mirror';scene.add(mirror);mirrorObjects.push(mirror);
   for(const dx of [-1,1])box(.020,2.43,.055,spec.x+dx*(spec.width/2+.012),1.215,z,chrome);
   for(const y of [.014,2.415])box(spec.width+.045,.022,.055,spec.x,y,z,chrome);

@@ -9,7 +9,7 @@ startSessionBridge();
 startLocalVoice();
 const session=createSessionServer();
 const root=fileURLToPath(new URL('.',import.meta.url));
-const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.glb':'model/gltf-binary','.wasm':'application/wasm','.wav':'audio/wav'};
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.ktx2':'image/ktx2','.glb':'model/gltf-binary','.wasm':'application/wasm','.wav':'audio/wav'};
 http.createServer(async(req,res)=>{
  try {
   if(await localVoiceProxy(req,res))return;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {Reflector} from 'three/addons/objects/Reflector.js';
 import {renderProfile} from './render-profile.js';
+import {registerPlanarReflection} from './planar-reflections.js';
 // The articulated cabin is separate from the office's static geometry batch.
 export function buildArrivalLift(scene,steel){
  const group=new THREE.Group();group.name='Arrival lift C14 · mirrored cabin';scene.add(group);
@@ -27,11 +28,7 @@ export function buildArrivalLift(scene,steel){
  function mirror(w,h,x,y,z,rotation){
   const object=new Reflector(new THREE.PlaneGeometry(w,h),{color:0xe4e9e7,textureWidth:renderProfile.mirrorWidth,textureHeight:renderProfile.mirrorHeight,clipBias:.003,multisample:renderProfile.mirrorSamples});
   object.name='Cabin mirror';object.position.set(x,y,z);object.rotation.y=rotation;group.add(object);
-  const draw=object.onBeforeRender;
-  object.onBeforeRender=function(renderer,s,camera,...args){
-   if(s.overrideMaterial||(renderProfile.mobile&&camera.position.distanceTo(this.getWorldPosition(new THREE.Vector3()))>5))return;const others=[],selves=[];s.traverse(o=>{if(o.isReflector&&o!==this&&o.visible){others.push(o);o.visible=false;}if(o.userData.mirrorSelf&&!o.visible){selves.push(o);o.visible=true;}});
-   try{draw.call(this,renderer,s,camera,...args);}finally{for(const o of others)o.visible=true;for(const o of selves)o.visible=false;}
-  };return object;
+  return registerPlanarReflection(scene,object,{mobile:renderProfile.mobile,maxDistance:renderProfile.mobile?5:12});
  }
  box(1.86,1.77,.025,0,1.48,4.668,chrome);mirror(1.80,1.71,0,1.48,4.651,Math.PI);
  box(.025,1.77,1.45,1.0,1.48,3.78,chrome);mirror(1.39,1.71,.983,1.48,3.78,-Math.PI/2);
