@@ -17,14 +17,14 @@ export function narrationFor(location,language='es'){
 }
 
 export function createTourVoice({synth,Utterance,onChange=()=>{},request=globalThis.fetch,AudioClass=globalThis.Audio,recorded=false}){
- let localAudio=null,localUrl=null,controller=null,localVoice=false,arrivalPlayed=false;
+ let localAudio=null,localUrl=null,controller=null,localVoice=false,arrivalPlayed=false,needsActivation=false;
  let role='client',enabled=true,paused=true,language=recorded?'en':'es',voiceURI='',volume=.8,current=null,utterance=null,activeVoice='',speaking=false,error='',generation=0;
  const voices=()=>synth?.getVoices?.()||[];
- const state=()=>({role,audible:narrationPolicy(role).audio,enabled,paused,language,voiceURI,volume,speaking,error,supported:Boolean(AudioClass||synth&&Utterance),voices:recorded?[]:voices().filter(v=>v.localService!==false),voiceName:recorded?voiceProfile.name:localVoice?'Kokoro · local':voices().find(v=>v.voiceURI===activeVoice)?.name||'',text:current?.text||'',zone:current?.zone||''});
+ const state=()=>({role,audible:narrationPolicy(role).audio,enabled,paused,language,voiceURI,volume,speaking,error,needsActivation,supported:Boolean(AudioClass||synth&&Utterance),voices:recorded?[]:voices().filter(v=>v.localService!==false),voiceName:recorded?voiceProfile.name:localVoice?'Kokoro · local':voices().find(v=>v.voiceURI===activeVoice)?.name||'',text:current?.text||'',zone:current?.zone||''});
  const emit=()=>onChange(state());
  function stop(){generation++;controller?.abort();controller=null;localAudio?.pause();localAudio=null;if(localUrl)URL.revokeObjectURL(localUrl);localUrl=null;speaking=false;if(synth)synth.cancel();utterance=null;}
  async function speak(){
-  stop();error='';
+  stop();error='';needsActivation=false;
   if(!current||!enabled||paused||!narrationPolicy(role).audio){emit();return;}
   const localToken=generation;localVoice=false;
   if(!voiceURI&&request&&AudioClass){
@@ -38,7 +38,7 @@ export function createTourVoice({synth,Utterance,onChange=()=>{},request=globalT
     localAudio.onended=()=>{if(localToken===generation){speaking=false;emit();}};
     localAudio.onerror=()=>{if(localToken===generation){speaking=false;error='Local audio unavailable';emit();}};
     await localAudio.play();emit();return;
-   }catch{if(localToken!==generation)return;}
+   }catch(error){if(localToken!==generation)return;if(error?.name==='NotAllowedError'){needsActivation=true;emit();return;}}
    finally{clearTimeout(timeout);}
   }
   if(recorded){error='Voiceover unavailable · tap Replay to retry';emit();return;}

@@ -20,6 +20,19 @@ async function load(path='../assets/avatars/mixamo/presenter.glb'){
  return new GLTFLoader().parseAsync(JSON.stringify(json),'');
 }
 
+test('welcome head tracking stays bounded instead of accumulating two complete spins',async()=>{
+ for(const path of ['../assets/avatars/mixamo/presenter.glb','../assets/avatars/client/client.glb','../assets/avatars/collaborator/collaborator.glb']){
+  const root=buildMixamoPresenter(new THREE.Scene(),await load(path));root.userData.animate(0);let head;root.traverse(o=>{if(o.isBone&&/^mixamorig\d*Head$/.test(o.name))head=o;});
+  const rest=head.quaternion.clone(),last=rest.clone();let travel=0;root.userData.welcomeRemaining=3.6;
+  for(let i=0;i<360;i++){
+   root.userData.animate(1/60,{lookAt:new THREE.Vector3(1,0,2)});
+   assert.ok(rest.angleTo(head.quaternion)<.65,path+' must keep a natural head pose');
+   const step=last.angleTo(head.quaternion);assert.ok(step<.12,'no sudden head snaps');travel+=step;last.copy(head.quaternion);
+  }
+  assert.ok(travel<3,'greeting must not accumulate rotations');
+ }
+});
+
 test('all three real rigs raise and wave a hand above the head, including when seated',async()=>{
  for(const path of ['../assets/avatars/mixamo/presenter.glb','../assets/avatars/client/client.glb','../assets/avatars/collaborator/collaborator.glb']){
   const root=buildMixamoPresenter(new THREE.Scene(),await load(path));let hand,head;

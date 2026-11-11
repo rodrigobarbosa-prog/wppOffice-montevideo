@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {renderProfile} from './render-profile.js';
 import {createCameraLook} from './camera-look.js';
+import {visitAudioOutput,VisitAudio} from './visit-audio-output.js';
 import {configureAvatarAssets} from './avatar-assets.js';
 import {createProgressiveAvatars,prepareAvatar} from './progressive-avatars.js';
 import {createShadowRefresh} from './shadow-refresh.js';
@@ -76,7 +77,7 @@ try{
  loading.set('people',.98,'Preparing the scene for a smooth entrance…');
  await renderer.compileAsync(scene,camera);
  loading.set('people',1,'People ready');loadStage='welcome';loading.set('welcome',0,'Loading the English welcome…');
- if(needsArrivalVoice){arrivalAudio=createArrivalVoice({onProgress:fraction=>loading.set('welcome',fraction,'Preparing your English welcome…')});window.addEventListener('pagehide',()=>arrivalAudio.destroy(),{once:true});await arrivalAudio.load();}
+ if(needsArrivalVoice){arrivalAudio=createArrivalVoice({AudioClass:VisitAudio,onProgress:fraction=>loading.set('welcome',fraction,'Preparing your English welcome…')});window.addEventListener('pagehide',()=>arrivalAudio.destroy(),{once:true});await arrivalAudio.load();}
  loading.set('welcome',1,'Ready to begin');$('loading-detail').textContent=needsArrivalVoice?'Office, people and English welcome are ready.':'Your office and people are ready.';
  // Begin in the next task so setup and the entry UI can finish first.
  setTimeout(()=>{void avatars.background();},250);
@@ -146,10 +147,10 @@ try{
  let role='client',clientPose={...initialView},collaboratorPose=null,hostMotion,hostPlaying=true,presenterAvailable=true,hasStarted=false;
  let cameraView='first',thirdPersonCamera=null,arrivalLookManual=false,arrivalGreetingSeen=false;
  let speechState={speaking:false},captionsVisible=false,voiceListKey='',pendingNarration='',narrationDwell=0;
- const narrator=createTourVoice({recorded:true,synth:window.speechSynthesis,Utterance:window.SpeechSynthesisUtterance,onChange:state=>{
+ const narrator=createTourVoice({recorded:true,AudioClass:VisitAudio,synth:window.speechSynthesis,Utterance:window.SpeechSynthesisUtterance,onChange:state=>{
   speechState=state;
   arrivalAudio?.setVolume(state.enabled?state.volume:0);
-  $('voice-toggle').textContent=state.enabled?(state.error?'Voice unavailable':'Voice: on'):'Voice: off';
+  $('voice-toggle').textContent=state.enabled?(state.needsActivation?'Voice: tap to enable':state.error?'Voice unavailable':'Voice: on'):'Voice: off';
   $('voice-toggle').setAttribute('aria-pressed',String(state.enabled));
   $('narration-state').textContent=state.error||(state.speaking?'Speaking · WPP Production':state.paused?'Voice guide paused':'WPP Production · Voice guide');
   $('narration-caption').textContent=narrationPolicy(role).captions?state.text:'';
@@ -164,11 +165,14 @@ try{
  if(previewOffice)narrator.setEnabled(false);
  function updateCaptions(){const state=narrator.state();$('narration-panel').hidden=!narrationPolicy(role).captions||!captionsVisible||!state.text;$('captions-toggle').textContent=captionsVisible?'Disable subtitles':'Enable subtitles';$('captions-toggle').setAttribute('aria-pressed',String(captionsVisible));document.body.classList.toggle('has-captions',narrationPolicy(role).captions&&captionsVisible&&Boolean(state.text));}
  $('camera-view').onchange=e=>{cameraView=e.target.value;canvas.focus();};
- $('voice-toggle').onclick=()=>narrator.setEnabled(!narrator.state().enabled);
+ $('voice-toggle').onclick=()=>{const retry=narrator.state().needsActivation;void visitAudioOutput.unlock().then(()=>{if(retry)narrator.replay();else narrator.setEnabled(!narrator.state().enabled);});};
+ const enableAudio=document.createElement('button');enableAudio.textContent='Enable audio';enableAudio.hidden=true;enableAudio.id='audio-enable';$('voice-toggle').parentElement.append(enableAudio);
+ visitAudioOutput.subscribe(({needsTap})=>{enableAudio.hidden=!needsTap;});
+ enableAudio.onclick=()=>{void visitAudioOutput.unlock().then(ok=>{if(ok&&narrator.state().needsActivation)narrator.replay();});};
  $('narration-language').onchange=e=>narrator.setLanguage(e.target.value);
  $('narration-voice').onchange=e=>narrator.setVoice(e.target.value);
  $('voice-volume').oninput=e=>narrator.setVolume(e.target.value);
- $('voice-replay').onclick=()=>narrator.replay();
+ $('voice-replay').onclick=()=>{void visitAudioOutput.unlock().then(()=>narrator.replay());};
  $('captions-toggle').onclick=()=>{captionsVisible=!captionsVisible;updateCaptions();};
  $('caption-close').onclick=()=>{captionsVisible=false;updateCaptions();};
  window.addEventListener('pagehide',()=>narrator.destroy(),{once:true});
@@ -285,7 +289,7 @@ try{
   visitControls.unlock();
   if(role==='client'&&!previewOffice&&arrivalIntro.active){arrivalIntro.start(arrivalAudio.state().duration);narrator.setPaused(true);if(!arrivalAudio.state().finished)void arrivalAudio.play();}else{narrator.visit(world.locationAt(camera.position.x,camera.position.z));narrator.setPaused(role!=='presenter'&&!hostPlaying);}
  };
- $('arrival-audio-retry').onclick=()=>{void arrivalAudio?.retry();canvas.focus();};
+ $('arrival-audio-retry').onclick=()=>{void visitAudioOutput.unlock().then(()=>arrivalAudio?.retry());canvas.focus();};
  $('pause').onclick=pause;$('help').onclick=()=>showDialog('guide');$('guide-toggle').onclick=()=>showDialog('guide');
  function useDoor(){if(seatInteractions.use())return;if(role==='client'&&!previewOffice&&arrivalDoor<.999)return;if(connectedVisit&&role!=='presenter')return;if($('welcome').hidden&&aimedDoor)world.entryDoor.toggle();}
  $('door-action').onclick=()=>{useDoor();canvas.focus();};
@@ -467,4 +471,5 @@ try{
  });
  // Read-only diagnostics for checking the pilot.
  window.officePilot=Object.freeze({snapshot:()=>({position:camera.position.toArray(),yaw,pitch,paused:!$('welcome').hidden,blocked:blocked(camera.position.x,camera.position.z),render:{...renderer.info.render}})});
+ window.addEventListener('pagehide',()=>visitAudioOutput.destroy(),{once:true});
 }catch(error){fail(error);}

@@ -17,3 +17,9 @@ test('a failed recording never switches the client to an unrelated system voice'
  const narrator=createTourVoice({recorded:true,AudioClass,synth:{getVoices:()=>[{voiceURI:'robot',lang:'en-US',localService:true}],cancel(){},speak(){spoken++;}},request:async()=>({ok:false})});
  narrator.visit('Pasillo');narrator.setPaused(false);await tick();assert.equal(spoken,0);assert.match(narrator.state().error,/Replay/);narrator.destroy();
 });
+test('mobile playback policy is recoverable activation, not Voice unavailable',async()=>{
+ let blocked=true;class AudioClass{pause(){}async play(){if(blocked){const e=Error('tap');e.name='NotAllowedError';throw e;}this.onplaying?.();}}
+ const narrator=createTourVoice({recorded:true,AudioClass,request:async()=>({ok:true,blob:async()=>new Blob(['wav'])})});
+ narrator.visit('Pasillo');narrator.setPaused(false);await tick();assert.equal(narrator.state().error,'');assert.equal(narrator.state().needsActivation,true);
+ blocked=false;narrator.replay();await tick();assert.equal(narrator.state().needsActivation,false);assert.equal(narrator.state().speaking,true);narrator.destroy();
+});

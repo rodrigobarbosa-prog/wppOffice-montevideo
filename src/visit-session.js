@@ -1,6 +1,7 @@
 // Local-server signaling and direct WebRTC media. No third-party relay or upload.
 import {sessionBase} from './session-address.js';
 import {streamsForPeer} from './media-routing.js';
+import {visitAudioOutput} from './visit-audio-output.js';
 export function createVisitSession({onState=()=>{},onAttention=()=>{},onScreen=()=>{},onStatus=()=>{},onRejected=()=>{},onAdmission=()=>{},onWaiting=()=>{}}={}){
  const id=crypto.randomUUID(),room=new URL(location.href).searchParams.get('room')||'office',peers=new Map();
  const base=sessionBase(location),params=new URL(location.href).searchParams;
@@ -21,7 +22,8 @@ export function createVisitSession({onState=()=>{},onAttention=()=>{},onScreen=(
   pc.ontrack=e=>{
    const stream=e.streams[0]||new MediaStream([e.track]);
    if(e.track.kind==='video'){onScreen(stream,key);e.track.onended=()=>onScreen(null,key);e.track.onmute=()=>onScreen(null,key);e.track.onunmute=()=>onScreen(stream,key);}
-   else{let audio=audioElements.get(key);if(!audio){audio=new Audio();audio.autoplay=true;audioElements.set(key,audio);}audio.srcObject=stream;audio.play().catch(()=>onStatus('Press Start visit to hear participants'));}
+   else if(visitAudioOutput.supported){visitAudioOutput.remote(key,stream);e.track.onended=()=>visitAudioOutput.remove(key,stream);}
+   else{let audio=audioElements.get(key);if(!audio){audio=new Audio();audio.autoplay=true;audioElements.set(key,audio);}audio.srcObject=stream;audio.play().catch(()=>onStatus('Tap Enable audio to hear participants'));}
   };
   addTracks(peer);if(state)post('state',state,key);return peer;
  }
@@ -38,7 +40,7 @@ export function createVisitSession({onState=()=>{},onAttention=()=>{},onScreen=(
   if(data.type==='role-busy'){events.close();destroyed=true;onRejected(data.role);return;}
   if(data.type==='peers'){for(const p of data.peers)connect(p);return;}
   if(data.type==='join'){connect(key);return;}
-  if(data.type==='leave'){peers.get(key)?.pc.close();peers.delete(key);audioElements.get(key)?.pause();audioElements.delete(key);onState(null,key);onScreen(null,key);return;}
+  if(data.type==='leave'){peers.get(key)?.pc.close();peers.delete(key);visitAudioOutput.remove(key);audioElements.get(key)?.pause();audioElements.delete(key);onState(null,key);onScreen(null,key);return;}
   if(data.type==='state'){const peer=connect(key);peer.role=data.payload?.role;addTracks(peer);onState(data.payload,key);return;}
   if(data.type==='attention'){onAttention(data.payload,key);return;}
   if(data.type!=='signal')return;
@@ -57,7 +59,7 @@ export function createVisitSession({onState=()=>{},onAttention=()=>{},onScreen=(
  return {publish(next){state=next;post('state',state);},attention(payload){post('attention',payload);},admit(id){post('admit',{},id);},
   media(next){streams=next.filter(Boolean);for(const peer of peers.values())addTracks(peer);},
   translation(next){translation=next;for(const peer of peers.values())addTracks(peer);},
-  unlock(){for(const audio of audioElements.values())audio.play().catch(()=>{});},
-  destroy(){destroyed=true;events.close();for(const peer of peers.values())peer.pc.close();for(const a of audioElements.values()){a.pause();a.srcObject=null;}peers.clear();}
+  unlock(){void visitAudioOutput.unlock();for(const audio of audioElements.values())audio.play().catch(()=>{});},
+  destroy(){destroyed=true;events.close();for(const [id,peer] of peers){peer.pc.close();visitAudioOutput.remove(id);}for(const a of audioElements.values()){a.pause();a.srcObject=null;}peers.clear();}
  };
 }

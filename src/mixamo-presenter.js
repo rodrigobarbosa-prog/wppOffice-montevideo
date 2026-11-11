@@ -33,6 +33,7 @@ export function buildMixamoPresenter(scene,gltf,{client=false,root=new THREE.Gro
  let current='idle',heading=root.rotation.y,phase=0,headYaw=0;
  actions.idle.play();mixer.update(0);
  let head;model.traverse(o=>{if(o.isBone&&/^mixamorig\d*Head$/.test(o.name))head=o;});
+ const animatedHead=head?.quaternion.clone();
  const axisY=new THREE.Vector3(0,1,0),world=new THREE.Quaternion(),parentWorld=new THREE.Quaternion(),turn=new THREE.Quaternion();
  root.userData.face=direction=>{heading=direction;root.rotation.y=direction;};
  root.userData.animate=(dt,{speed=0,gesture='idle',lookAt=null,direction=null,speaking=false,seated=root.userData.seated||0}={})=>{
@@ -41,7 +42,11 @@ export function buildMixamoPresenter(scene,gltf,{client=false,root=new THREE.Gro
   phase+=speed*dt*10.2;
   const next=speed>.025?'walk':gesture in actions?gesture:'idle';
   if(next!==current){const blend=next==='welcome'||current==='welcome'?.55:.28;actions[current].fadeOut(blend);actions[next].reset().setEffectiveWeight(1).fadeIn(blend).play();if(next==='welcome')actions[next].setEffectiveTimeScale(.9);current=next;}
+  // PropertyMixer can skip writing unchanged keyframes. Restore the authored
+  // pose before updating, so procedural looking never accumulates on itself.
+  if(head)head.quaternion.copy(animatedHead);
   actions.walk.setEffectiveTimeScale(Math.max(.04,speed/1));mixer.update(dt);
+  if(head)animatedHead.copy(head.quaternion);
   if(direction!==null){const delta=Math.atan2(Math.sin(direction-heading),Math.cos(direction-heading));heading+=delta*(1-Math.exp(-dt*6));root.rotation.y=heading;}
   if(head&&lookAt){
    const angle=Math.atan2(lookAt.x-root.position.x,lookAt.z-root.position.z)-heading;
