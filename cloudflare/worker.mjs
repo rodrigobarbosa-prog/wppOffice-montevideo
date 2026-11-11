@@ -25,5 +25,6 @@ export default {async fetch(request,env){
   return new Response('Unknown narration',{status:404});
  }
  if(url.pathname==='/health')return Response.json({service:'wppoffice-montevideo',version:'2026-11-10',sessions:'durable-objects',voice:'prerecorded-kokoro'});
- return new Response('Not found',{status:404});
+ // Service bindings enter this handler directly, including requests for static assets.
+ return env.ASSETS.fetch(request);
 }};

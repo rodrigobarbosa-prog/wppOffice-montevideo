@@ -1,6 +1,6 @@
 # wppOffice-montevideo en Cloudflare
 
-Publicado el 11 de noviembre de 2026: https://wppoffice-montevideo.a-paso-lento.workers.dev
+Publicado el 11 de noviembre de 2026: https://wppoffice-montevideo.pages.dev
 
 Proyecto independiente: **wppoffice-montevideo**. Nunca usar `turbo-wpp`, que pertenece a officeGame.
 
@@ -14,7 +14,9 @@ El lobby público genera una sala y sus invitaciones. El presentador entra prime
 
 WebRTC usa conexión directa y STUN público de Cloudflare al entrar por Internet. No se configura TURN pago: redes que bloquean conexiones directas pueden impedir audio/pantalla aunque la visita 3D y la sincronización funcionen. Verificar desde dos redes antes de usar con clientes externos. No se habilitan servicios pagos automáticamente.
 
-La publicación por CLI es manual. La conexión automática con un repositorio GitHub de este proyecto es un paso independiente; no reutilizar el repositorio ni las credenciales de builds de officeGame.
+La entrada pública es el proyecto Pages `wppoffice-montevideo`. Su `_worker.js` reenvía las peticiones al servicio interno `wppoffice-montevideo` mediante el binding `OFFICE`, conservando la misma URL para recursos, voz y salas. La URL workers.dev del Worker sigue desactivada. Cada despliegue del Worker actualiza lo que sirve Pages automáticamente. No reutilizar el repositorio ni los builds de officeGame.
+
+Solo si cambia la entrada Pages: desde la raíz, ejecutar `npx wrangler pages deploy --cwd cloudflare/pages-gateway --project-name wppoffice-montevideo --branch main`. Su configuración y binding están en `cloudflare/pages-gateway/wrangler.jsonc`.
 
 ## Repositorio y próximo enlace de builds
 
@@ -22,4 +24,4 @@ Repositorio propio: https://github.com/rodrigobarbosa-prog/wppOffice-montevideo
 
 Se desarrolla y revisa en localhost. No publicar cambios hasta que el usuario lo indique. Al habilitar Workers Builds, cada push a `main` publicará: reservar esos pushes para entregas autorizadas y trabajar en ramas para cambios en revisión.
 
-Para vincular más adelante el Worker existente `wppoffice-montevideo` con este repositorio: raíz `/`, rama de producción `main`, comando de build `npm run build`, comando de deploy `npx wrangler deploy`. La instalación de dependencias debe ejecutarse antes del build. Esta configuración utiliza el Worker y Durable Object existentes; no crear otro proyecto ni seleccionar officeGame. La conexión aún no está habilitada.
+Configuración de Workers Builds para el Worker existente `wppoffice-montevideo`: raíz `/`, rama de producción `main`, comando de build `npm run build`, comando de deploy `npx wrangler deploy`. Instalar dependencias antes del build. El usuario realizó la conexión en el dashboard; la primera ejecución automática debe verificarse en sus logs. No crear otro Worker ni seleccionar officeGame.
