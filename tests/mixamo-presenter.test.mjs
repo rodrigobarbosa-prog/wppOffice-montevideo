@@ -58,6 +58,20 @@ test('Mixamo clothes share animated joints, arms leave T-pose and feet stay grou
  assert.equal(avatar.userData.animation.speaking,true);
 });
 
+test('all three avatars preserve original finger joints during body animations, seating and attention',async()=>{
+ for(const path of ['../assets/avatars/mixamo/presenter.glb','../assets/avatars/client/client.glb','../assets/avatars/collaborator/collaborator.glb']){
+ const gltf=await load(path),fingers=[];gltf.scene.traverse(b=>{if(b.isBone&&/Hand(Thumb|Index|Middle|Ring|Pinky)\d$/.test(b.name))fingers.push({bone:b,rest:b.quaternion.clone()});});
+ assert.equal(fingers.length,40);
+ for(const clip of gltf.animations)assert.ok(clip.tracks.every(track=>! /Hand(Thumb|Index|Middle|Ring|Pinky)/.test(track.name)),'foreign finger axes must not deform the native hand');
+ const avatar=buildMixamoPresenter(new THREE.Scene(),gltf);
+ for(const gesture of ['idle','walk','welcome','explain'])for(let i=0;i<100;i++){
+  avatar.userData.animate(1/30,{gesture,speed:gesture==='walk'?1:0});
+  for(const {bone,rest} of fingers)assert.ok(bone.quaternion.angleTo(rest)<1e-6);
+ }
+ for(const seated of [0,1]){avatar.userData.animate(.1,{seated});applyAttentionGesture(avatar,1.2);for(const {bone,rest} of fingers)assert.ok(bone.quaternion.angleTo(rest)<1e-6);}
+ }
+});
+
 test('Passive Marker Man has an independent animated body and natural resting arms',async()=>{
  const gltf=await load('../assets/avatars/client/client.glb'),scene=new THREE.Scene();
  const client=buildMixamoPresenter(scene,gltf,{client:true});

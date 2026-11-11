@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {renderProfile} from './render-profile.js';
 import {createSeatMotion} from './seating.js';
 import {createFollowSeating} from './follow-seating.js';
 import {presenterWaitState} from './presenter-wait.js';
@@ -25,7 +26,7 @@ import {createTourVoice,narrationPolicy} from './tour-voice.js';
 import {partition,serviceWall,kitchen,officeWest,meetingRooms,officeShiftZ,collaboratorStation} from './office-layout.js';
 
 const $=id=>document.getElementById(id),canvas=$('scene'),keys=new Set();
-let renderer,world,camera,yaw=0,pitch=0,dragging=false,high=true;
+let renderer,world,camera,yaw=0,pitch=0,dragging=false,high=!renderProfile.mobile;
 let lookPointer=null,lastLookX=0,lastLookY=0;
 const eyeHeight=1.68,radius=.24;
 const joystick=setupJoystick($('joystick'));
@@ -40,8 +41,8 @@ function fail(error){$('welcome').hidden=false;$('tour-ui').hidden=true;$('welco
 window.addEventListener('error',e=>fail(e.error||new Error(e.message)));
 window.addEventListener('unhandledrejection',e=>fail(e.reason));
 try{
- renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
- renderer.setPixelRatio(Math.min(devicePixelRatio,1.25));renderer.setSize(innerWidth,innerHeight);
+ renderer=new THREE.WebGLRenderer({canvas,antialias:!renderProfile.mobile,powerPreference:renderProfile.mobile?'default':'high-performance'});
+ renderer.setPixelRatio(Math.min(devicePixelRatio,renderProfile.mobile?1:1.25));renderer.setSize(innerWidth,innerHeight);canvas.dataset.graphicsProfile=renderProfile.mobile?'mobile':'desktop';
  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.0;
  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
  const scene=new THREE.Scene();scene.background=new THREE.Color('#c5dce6');scene.fog=new THREE.Fog('#c5dce6',350,1800);
@@ -50,13 +51,14 @@ try{
  if(loadingInLift){camera.position.set(liftArrival.client.x,eyeHeight,liftArrival.client.z);camera.rotation.set(liftArrival.client.pitch,liftArrival.client.yaw,0);world.arrivalLift.set(0,10);renderer.render(scene,camera);$('lift-loading-preview').hidden=true;canvas.dataset.loadingPreview='live';renderer.setAnimationLoop(()=>renderer.render(scene,camera));}
  const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(renderer),env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.55;room.dispose();
  // Bake one reflection probe of this actual static office for metals, glass and varnish.
- const reflectionTarget=new THREE.WebGLCubeRenderTarget(128,{type:THREE.HalfFloatType});
+ if(renderProfile.reflectionProbe){const reflectionTarget=new THREE.WebGLCubeRenderTarget(128,{type:THREE.HalfFloatType});
  const reflectionCamera=new THREE.CubeCamera(.08,80,reflectionTarget);reflectionCamera.position.set(-6.6,1.7,-6);reflectionCamera.update(renderer,scene);
  const officeEnvironment=pmrem.fromCubemap(reflectionTarget.texture);scene.environment=officeEnvironment.texture;scene.environmentIntensity=.7;
- env.dispose();reflectionTarget.dispose();pmrem.dispose();
+ env.dispose();reflectionTarget.dispose();}pmrem.dispose();
  loading.set('lighting',1,'Lighting ready');loadStage='people';loading.set('people',0,'Loading your presenter and visitors…');
  const visuals=createVisuals(renderer,scene,camera,()=>{high=false;$('quality').textContent='Image: smooth';});
- const [presenterAvatar,clientAvatar,collaboratorAvatar]=await Promise.all([createPresenterAvatar(scene),createClientAvatar(scene),createCollaboratorAvatar(scene)]);
+ // Serialize decoding on mobile to cap transient image/GLB memory peaks.
+ const [presenterAvatar,clientAvatar,collaboratorAvatar]=renderProfile.mobile?[await createPresenterAvatar(scene),await createClientAvatar(scene),await createCollaboratorAvatar(scene)]:await Promise.all([createPresenterAvatar(scene),createClientAvatar(scene),createCollaboratorAvatar(scene)]);
  loading.set('people',1,'People ready');loadStage='welcome';loading.set('welcome',0,'Loading the English welcome…');
  if(needsArrivalVoice){arrivalAudio=createArrivalVoice({onProgress:fraction=>loading.set('welcome',fraction,'Preparing your English welcome…')});window.addEventListener('pagehide',()=>arrivalAudio.destroy(),{once:true});await arrivalAudio.load();}
  loading.set('welcome',1,'Ready to begin');$('loading-detail').textContent=needsArrivalVoice?'Office, people and English welcome are ready.':'Your office and people are ready.';
@@ -293,7 +295,7 @@ try{
  $('reset').onclick=()=>{const previousRole=role;clientPose={...world.spawn};collaboratorPose=null;role='client';clientView();if(previousRole!=='client')switchRole(previousRole);updateRole();keys.clear();$('settings').open=false;canvas.focus();};
  $('quality').textContent=high?'Image: detail':'Image: smooth';
  $('quality').title='Switch image quality';
- $('quality').onclick=()=>{high=!high;visuals.quality(high);$('quality').textContent=high?'Image: detail':'Image: smooth';};
+ $('quality').onclick=()=>{high=visuals.quality(!high);$('quality').textContent=high?'Image: detail':'Image: smooth';};
  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);visuals.resize();});
  canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();pause();fail(new Error('Graphics interrupted. Please reload.'));});
  let previous=performance.now(),lastPublish=0;

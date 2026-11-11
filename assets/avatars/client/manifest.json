@@ -4,27 +4,27 @@
   "license": "Adobe Mixamo commercial project use; not a standalone asset redistribution",
   "facialRig": false,
   "bones": 65,
-  "mappedBones": 52,
+  "mappedBones": 22,
   "animations": [
     {
       "name": "idle",
       "duration": 2.7333333492279053,
-      "tracks": 53
+      "tracks": 23
     },
     {
       "name": "walk",
       "duration": 1.2000000476837158,
-      "tracks": 53
+      "tracks": 23
     },
     {
       "name": "welcome",
       "duration": 2.8333332538604736,
-      "tracks": 53
+      "tracks": 23
     },
     {
       "name": "explain",
       "duration": 35.56666564941406,
-      "tracks": 53
+      "tracks": 23
     }
   ],
   "motionSource": "Microsoft Rocketbox, MIT; retargeted to Mixamo skeleton"

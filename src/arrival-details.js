@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {Reflector} from 'three/addons/objects/Reflector.js';
+import {renderProfile} from './render-profile.js';
 import {arrival,entryBrandWall,entryVestibule} from './arrival-layout.js';
 
 export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,label,white,steel,black,finish,glow,brandMat,solids,plant}){
@@ -61,11 +62,11 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
  // Full-height mirror strips in steel frames. Shared guard prevents paired mirrors recursing.
  for(const spec of arrival.mirrors){
   const z=spec.side==='far'?2.491:.151,rotation=spec.side==='far'?Math.PI:0;
-  const mirror=new Reflector(new THREE.PlaneGeometry(spec.width,2.37),{color:0xf0f0eb,textureWidth:512,textureHeight:1024,clipBias:.003,multisample:2});
+  const mirror=new Reflector(new THREE.PlaneGeometry(spec.width,2.37),{color:0xf0f0eb,textureWidth:renderProfile.mirrorWidth,textureHeight:renderProfile.mobile?256:1024,clipBias:.003,multisample:renderProfile.mirrorSamples});
   mirror.position.set(spec.x,1.205,z);mirror.rotation.y=rotation;
   const draw=mirror.onBeforeRender;
   mirror.onBeforeRender=function(renderer,s,camera,...args){
-   if(reflecting||s.overrideMaterial)return;
+   if(reflecting||s.overrideMaterial||(renderProfile.mobile&&camera.position.distanceTo(this.position)>6))return;
    reflecting=true;try{draw.call(this,renderer,s,camera,...args);}finally{reflecting=false;}
   };
   mirror.name='Hall mirror';scene.add(mirror);mirrorObjects.push(mirror);
@@ -169,7 +170,7 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
    if(hit.isPointInPath(mark,x,y,'evenodd')){c.beginPath();c.ellipse(startX+x*markScale,startY+y*markHeight,5.8,6.1,0,0,Math.PI*2);c.fill();}
   }
   c.font='bold 190px Arial';c.textAlign='center';c.fillText('Production',cw*.57,ch*.49,cw*.86);
- },4096,4096);
+ },renderProfile.mobile?1024:4096,renderProfile.mobile?1024:4096);
  graphic.anisotropy=16;
  faceTexture(graphic,w,2.43,(b.x1+b.x2)/2,1.315,b.z-.002,Math.PI);
  box(w,.28,.32,(b.x1+b.x2)/2,2.71,-.16,white);

@@ -34,7 +34,22 @@ for(const [side,short] of [['Left','L'],['Right','R']]){
 const targetRest=new Map(),sourceRest=new Map();
 for(const [name,bone] of primary){targetRest.set(bone,{p:bone.position.clone(),q:bone.quaternion.clone(),world:bone.getWorldQuaternion(new T.Quaternion())});}
 source.scene.traverse(o=>{sourceRest.set(o.name,o.getWorldQuaternion(new T.Quaternion()).invert());});
-const mapping=[...primary].map(([name,bone])=>({bone,source:source.scene.getObjectByName(pairs[name.replace(/^mixamorig\d*/, '')])})).filter(p=>p.source);
+// Rocketbox finger axes differ from Mixamo. Keep the original relaxed fingers,
+// rather than applying incompatible knuckle rotations to the downloaded skin.
+const mapping=[...primary].filter(([name])=>! /Hand(Thumb|Index|Middle|Ring|Pinky)/.test(name)).map(([name,bone])=>({bone,source:source.scene.getObjectByName(pairs[name.replace(/^mixamorig\d*/, '')])})).filter(p=>p.source);
+function palmFrame(hand,index,pinky,middle){
+ const origin=hand.getWorldPosition(new T.Vector3());
+ const forward=middle.getWorldPosition(new T.Vector3()).sub(origin).normalize();
+ const across=index.getWorldPosition(new T.Vector3()).sub(pinky.getWorldPosition(new T.Vector3()));
+ across.addScaledVector(forward,-across.dot(forward)).normalize();
+ return new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(across,forward,new T.Vector3().crossVectors(across,forward).normalize()));
+}
+for(const pair of mapping){
+ const side=pair.bone.name.replace(/^mixamorig\d*/, '').match(/^(Left|Right)Hand$/)?.[1];if(!side)continue;
+ const target=['Index','Pinky','Middle'].map(f=>[...primary].find(([n])=>n.replace(/^mixamorig\d*/, '')===side+'Hand'+f+'1')?.[1]);
+ const originals=['Index','Pinky','Middle'].map(f=>source.scene.getObjectByName(pairs[side+'Hand'+f+'1']));
+ if(target.every(Boolean)&&originals.every(Boolean))pair.palm={originals,inverseRest:palmFrame(pair.bone,...target).invert()};
+}
 // Match joint directions as well as rotation deltas: the two characters have
 // different arm rest poses. Applying rotation deltas alone leaves a T-pose offset.
 for(const pair of mapping){
@@ -58,9 +73,10 @@ for(const clip of source.animations){
   const time=frame*clip.duration/count;times.push(time);mixer.setTime(Math.min(time,clip.duration-1e-6));source.scene.updateMatrixWorld(true);
   for(const [bone,rest] of targetRest){bone.position.copy(rest.p);bone.quaternion.copy(rest.q);}
   model.updateMatrixWorld(true);
-  for(const {bone,source:original,child,restDirection} of mapping){
+  for(const {bone,source:original,child,restDirection,palm} of mapping){
    original.getWorldQuaternion(deltaQ);deltaQ.multiply(sourceRest.get(original.name));q.copy(deltaQ).multiply(targetRest.get(bone).world);
-   if(child&&bone!==hip){
+   if(palm){q.copy(palmFrame(original,...palm.originals)).multiply(palm.inverseRest).multiply(targetRest.get(bone).world);}
+   else if(child&&bone!==hip){
     const desired=child.getWorldPosition(new T.Vector3()).sub(original.getWorldPosition(new T.Vector3())).normalize();
     const predicted=restDirection.clone().applyQuaternion(deltaQ).normalize();
     correctionQ.setFromUnitVectors(predicted,desired);q.premultiply(correctionQ);

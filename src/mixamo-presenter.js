@@ -1,6 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 import {applySeatedPose} from './seated-pose.js';
 import {applyAttentionGesture} from './attention-gesture.js';
+import {renderProfile} from './render-profile.js';
 
 // Keep the downloaded character's authored clothing, hair geometry and texture colors.
 export function buildMixamoPresenter(scene,gltf,{client=false}={}){
@@ -19,7 +20,7 @@ export function buildMixamoPresenter(scene,gltf,{client=false}={}){
     envMapIntensity:.65,specularIntensity:hair?.15:.25,sheen:hair?.08:.16,sheenRoughness:.8,
     sheenColor:new THREE.Color('#a8b2bc'),side:hair?THREE.DoubleSide:THREE.FrontSide,
     alphaTest:hair?.38:0,alphaToCoverage:hair,dithering:true});
-   for(const texture of [material.map,material.normalMap])if(texture){texture.flipY=false;texture.anisotropy=16;texture.needsUpdate=true;}
+   for(const texture of [material.map,material.normalMap])if(texture){texture.flipY=false;texture.anisotropy=renderProfile.mobile?2:16;texture.needsUpdate=true;}
    return material;
   };
   mesh.material=Array.isArray(mesh.material)?mesh.material.map(convert):convert(mesh.material);
