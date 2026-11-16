@@ -1,5 +1,5 @@
 import {processMicrophone} from './microphone-processing.js';
-export function createVisitMedia({devices,processAudio=processMicrophone,onChange=()=>{},onStreams=()=>{},onScreen=()=>{}}){
+export function createVisitMedia({devices,processAudio=processMicrophone,prepareAudio=()=>Promise.resolve(),onChange=()=>{},onStreams=()=>{},onScreen=()=>{}}){
  let rawAudio=null,processor=null,micEpoch=0;
  let role='client',audio=null,screen=null,micPending=false,screenPending=false,destroyed=false,error='';
  const emit=()=>{onChange({role,mic:Boolean(audio),sharing:Boolean(screen),micPending,screenPending,error,noiseMode:audio?(processor?.mode||'browser'):'off'});onStreams([audio,screen].filter(Boolean));};
@@ -12,9 +12,11 @@ export function createVisitMedia({devices,processAudio=processMicrophone,onChang
    if(audio){stopMic();return;}if(micPending)return;
    const owner=role,epoch=++micEpoch;micPending=true;error='';emit();
    try{
+    const prepared=Promise.resolve(prepareAudio()).catch(()=>false);
     if(!devices?.getUserMedia)throw Error('Microphone is unavailable in this browser.');
     const stream=await devices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1},video:false});
     if(destroyed||owner!==role||epoch!==micEpoch){stop(stream);return;}rawAudio=stream;
+    await prepared;
     const filtered=await processAudio(stream);
     if(destroyed||owner!==role||epoch!==micEpoch){stop(stream);filtered.destroy();return;}
     processor=filtered;audio=filtered.stream;

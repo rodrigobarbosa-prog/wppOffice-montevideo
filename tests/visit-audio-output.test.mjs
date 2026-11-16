@@ -29,3 +29,10 @@ test('welcome pause and resume preserve time, and only real completion calls one
  const f=fixture(),audio=new f.AudioClass('welcome');await f.tap();let ended=0;audio.onended=()=>ended++;await audio.play();
  f.output.getContext().currentTime=2;audio.pause();assert.equal(audio.currentTime,2);assert.equal(ended,0);await audio.play();f.sources.at(-1).onended();assert.equal(ended,1);assert.equal(audio.currentTime,5);f.output.destroy();
 });
+test('remote RTP decoder is started muted and released with its stream',()=>{
+ let element;class AudioClass{constructor(){element=this;}play(){this.played=true;return Promise.resolve();}pause(){this.paused=true;}}
+ const source={connect(){},disconnect(){this.disconnected=true;}},context={state:'running',destination:{},createMediaStreamSource:()=>source,close:async()=>{}};
+ const output=createVisitAudioOutput({Context:function(){return context;},AudioClass}),stream={};output.remote('presenter',stream);
+ assert.equal(element.played,true);assert.equal(element.muted,true);assert.equal(element.srcObject,stream);
+ output.remove('presenter',stream);assert.equal(source.disconnected,true);assert.equal(element.paused,true);assert.equal(element.srcObject,null);output.destroy();
+});

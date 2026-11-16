@@ -4,8 +4,11 @@ import {createVisitSession} from './visit-session.js';
 import {inviteUrl} from './lobby-model.js';
 import {participantReturnUrl} from './client-entry-model.js';
 import {createRemoteMotion} from './remote-motion.js';
+import {visitAudioOutput} from './visit-audio-output.js';
+import {processMicrophone} from './microphone-processing.js';
+import {validSocialGesture} from './social-gesture.js';
 
-export function setupVisitControls({scene,onExplore,onAttention,onScreenVisit=()=>false}){
+export function setupVisitControls({scene,onExplore,onAttention,onGesture=()=>{},onScreenVisit=()=>false}){
  const $=id=>document.getElementById(id),labels={client:'Client',presenter:'Presenter',collaborator:'Brian · Collaborator'};
  let waitingCount=0,stateSequence=0;
  let screenVisit='idle',role='client',following=true,mediaState={mic:false,sharing:false},pose={},localScreen=null,activeScreen=null,screenTexture=null;
@@ -51,9 +54,9 @@ export function setupVisitControls({scene,onExplore,onAttention,onScreenVisit=()
   onWaiting:queue=>{waitingCount=queue.length;const panel=$('admission-panel'),list=$('admission-queue');panel.hidden=role!=='presenter'||!waitingCount;list.replaceChildren();for(const guest of queue){const card=document.createElement('div'),title=document.createElement('strong'),copy=document.createElement('p'),button=document.createElement('button');card.className='admission-notice';title.textContent=guest.name;copy.textContent='Solicita entrar a la visita';button.textContent='Aceptar';button.setAttribute('aria-label','Aceptar ingreso de '+guest.name);button.onclick=()=>{button.disabled=true;button.textContent='Aceptando…';session.admit(guest.id);};card.append(title,copy,button);list.append(card);}},
   onRejected:reason=>{rejected=true;media.destroy();if(new URL(location.href).searchParams.get('modo')==='client'){$('enter').disabled=true;$('status').textContent='Volvé a tu invitación para solicitar ingreso nuevamente.';$('welcome-title').textContent='Tu visita estará lista en un momento';$('welcome').hidden=false;$('tour-ui').hidden=true;return;}$('enter').disabled=true;$('status').textContent=reason==='host-required'?'El presentador debe iniciar la visita. Volvé al lobby para solicitar ingreso.':'This role is already occupied in the room. Return to the lobby and choose an available role.';$('welcome-title').textContent=reason==='host-required'?'El presentador debe estar conectado':'Role already connected';$('welcome').hidden=false;$('tour-ui').hidden=true;$('connection-state').textContent='Role already occupied';},
   onScreen:(stream,id)=>{if(stream)remoteScreens.set(id,stream);else remoteScreens.delete(id);attachScreen();},
-  onAttention:data=>{if(!Object.hasOwn(labels,data?.from)||!Object.hasOwn(labels,data?.target))return;toast(data.kind==='screen'?labels[data.from]+' is viewing Brian’s screen.':labels[data.from]+' is asking for '+labels[data.target]+'’s attention.');onAttention(data.target,data.from);}
+  onAttention:(data,id)=>{if(!Object.hasOwn(labels,data?.from))return;if(data.kind==='gesture'){if(remotes.get(id)?.role===data.from&&validSocialGesture(data.gesture,data.point))onGesture(data.gesture,data.point,data.from);return;}if(!Object.hasOwn(labels,data?.target))return;toast(data.kind==='screen'?labels[data.from]+' is viewing Brian’s screen.':labels[data.from]+' is asking for '+labels[data.target]+'’s attention.');onAttention(data.target,data.from);}
  });
- const media=createVisitMedia({devices:navigator.mediaDevices,
+ const media=createVisitMedia({devices:navigator.mediaDevices,prepareAudio:()=>visitAudioOutput.unlock(),processAudio:stream=>processMicrophone(stream,{context:visitAudioOutput.getContext()}),
   onChange:next=>{mediaState=next;update();publish();if(next.error)toast(next.error);},
   onStreams:streams=>session.media(streams),onScreen:stream=>{localScreen=stream;attachScreen();}
  });
@@ -83,9 +86,10 @@ export function setupVisitControls({scene,onExplore,onAttention,onScreenVisit=()
  window.addEventListener('pagehide',()=>{media.destroy();session.destroy();screenTexture?.dispose();},{once:true});
  update();
  return {interact,arriveScreen:showScreen,screenPhase:()=>screenVisit,waitForClient(value,message){$('presenter-waiting').hidden=role!=='presenter'||!value;if(message)$('presenter-waiting').textContent=message;},setRole(next){role=next;media.setRole(next);update();publish();},unlock(){session.unlock();},
+  gesture(kind,point){if(validSocialGesture(kind,point))session.attention({kind:'gesture',gesture:kind,point,from:role});},
   publishPose(next){pose=next;publish();},
   remotePose(name){const entry=[...remotes].find(([,p])=>p.role===name),peer=entry&&remoteMotion.sample(entry[0],performance.now());return peer&&Number.isFinite(peer.x)&&Number.isFinite(peer.z)&&Math.abs(peer.x)<100&&Math.abs(peer.z)<100?{...peer,heading:Number.isFinite(peer.heading)?peer.heading:0,speed:Number.isFinite(peer.speed)?Math.min(3,Math.max(0,peer.speed)):0,gesture:['idle','walk','welcome','explain'].includes(peer.gesture)?peer.gesture:'idle'}:null;},
-  setFollowing(next){following=next;update();},state(){return {following,role,mic:mediaState.mic,sharing:Boolean(activeScreen)};}
+  setFollowing(next){following=next;update();},state(){return {following,role,mic:mediaState.mic,conversation:mediaState.mic||[...remotes.values()].some(p=>p.mic),sharing:Boolean(activeScreen)};}
   ,hasPeer(name){return [...remotes.values()].some(p=>p.role===name);},rejected(){return rejected||!admitted;}
  };
 }

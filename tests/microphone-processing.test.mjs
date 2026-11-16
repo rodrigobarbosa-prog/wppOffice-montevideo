@@ -19,3 +19,7 @@ test('unavailable audio processing keeps the original microphone stream',async()
  class BrokenContext {async resume(){throw Error('unavailable');}close(){return Promise.resolve();}}
  const failed=await processMicrophone(raw,{Context:BrokenContext});assert.equal(failed.stream,raw);assert.equal(failed.mode,'browser');
 });
+test('a shared unlocked context survives muting; suspended processing falls back to audible browser capture',async()=>{
+ const h=harness(),shared=new h.Context({});shared.state='running';const result=await processMicrophone({},{context:shared});assert.equal(result.mode,'balanced');result.destroy();assert.equal(shared.closed,undefined);
+ const raw={id:'browser microphone'},suspended={state:'suspended',resume:async()=>{}};const fallback=await processMicrophone(raw,{context:suspended});assert.equal(fallback.stream,raw);assert.equal(fallback.mode,'browser');
+});

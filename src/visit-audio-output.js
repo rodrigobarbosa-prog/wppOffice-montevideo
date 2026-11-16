@@ -1,6 +1,6 @@
 // One playback context is unlocked by Start visit. Recordings and remote
 // microphones arriving later share it instead of creating locked media players.
-export function createVisitAudioOutput({Context=globalThis.AudioContext||globalThis.webkitAudioContext}={}){
+export function createVisitAudioOutput({Context=globalThis.AudioContext||globalThis.webkitAudioContext,AudioClass=globalThis.Audio}={}){
  let context=null,needsTap=false,started=false,unlockPending=null;const peers=new Map(),listeners=new Set();
  const emit=()=>{for(const listener of listeners)listener({needsTap});};
  function getContext(){
@@ -13,6 +13,7 @@ export function createVisitAudioOutput({Context=globalThis.AudioContext||globalT
   blocked(){needsTap=true;emit();},
   unlock(){
    const c=getContext();if(!c)return Promise.resolve(false);started=true;
+   for(const peer of peers.values())peer.audio?.play().catch(()=>{});
    // Call resume synchronously inside the user's tap, before any fetch/await.
    try{const resumed=c.resume();unlockPending=new Promise(resolve=>{const timeout=setTimeout(()=>resolve(false),1200);Promise.resolve(resumed).then(()=>{clearTimeout(timeout);resolve(c.state==='running');},()=>{clearTimeout(timeout);resolve(false);});}).then(ok=>{needsTap=!ok;emit();return ok;});return unlockPending;}
    catch{needsTap=true;emit();return Promise.resolve(false);}
@@ -21,11 +22,15 @@ export function createVisitAudioOutput({Context=globalThis.AudioContext||globalT
   async decode(bytes){const c=getContext();if(!c)throw Error('Audio unavailable');return c.decodeAudioData(bytes);},
   remote(id,stream){
    this.remove(id);const c=getContext();if(!c)return false;
-   const source=c.createMediaStreamSource(stream);source.connect(c.destination);peers.set(id,{source,stream});
+   // Chromium may receive RTP but leave decoded remote audio silent until a
+   // media element pulls it. Keep that decoder active, muted; Web Audio is the
+   // only audible output, with the entry gesture still controlling playback.
+   let audio=null;if(AudioClass){audio=new AudioClass();audio.muted=true;audio.playsInline=true;audio.srcObject=stream;void audio.play().catch(()=>this.blocked());}
+   const source=c.createMediaStreamSource(stream);source.connect(c.destination);peers.set(id,{source,stream,audio});
    if(c.state!=='running')this.blocked();return true;
   },
-  remove(id,stream){const peer=peers.get(id);if(stream&&peer?.stream!==stream)return;peer?.source.disconnect();peers.delete(id);},
-  destroy(){for(const {source} of peers.values())source.disconnect();peers.clear();listeners.clear();context?.close().catch(()=>{});}
+  remove(id,stream){const peer=peers.get(id);if(stream&&peer?.stream!==stream)return;peer?.source.disconnect();peer?.audio?.pause();if(peer?.audio)peer.audio.srcObject=null;peers.delete(id);},
+  destroy(){for(const id of peers.keys())this.remove(id);listeners.clear();context?.close().catch(()=>{});}
  };
 }
 

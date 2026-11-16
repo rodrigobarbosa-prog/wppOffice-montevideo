@@ -20,3 +20,8 @@ test('a closed door stops the follower and opening it allows movement without te
  for(let i=0;i<120;i++){const pose=follow.update(.05,client,host,blocked);assert.ok(Math.hypot(pose.x-client.x,pose.z-client.z)<.084);moved||=pose.speed>0;Object.assign(client,pose);}
  assert.ok(moved&&client.x>2.8);
 });
+test('an unreachable overlap/obstacle does not trigger a full path search on every animation frame',()=>{
+ let queries=0;const follow=createClientFollower(),blocked=()=>{queries++;return true;};
+ for(let i=0;i<60;i++)follow.update(1/60,{x:0,z:0},{x:5,z:0},blocked);
+ assert.ok(queries<10,'retry budget must survive an empty failed path');
+});

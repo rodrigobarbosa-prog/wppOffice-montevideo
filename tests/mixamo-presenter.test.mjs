@@ -32,6 +32,18 @@ test('welcome head tracking stays bounded instead of accumulating two complete s
   assert.ok(travel<3,'greeting must not accumulate rotations');
  }
 });
+test('all three rigs show thumbs up, point to a world position and shake no, then restore finger poses',async()=>{
+ for(const path of ['../assets/avatars/mixamo/presenter.glb','../assets/avatars/client/client.glb','../assets/avatars/collaborator/collaborator.glb']){
+  const root=buildMixamoPresenter(new THREE.Scene(),await load(path));root.userData.animate(0);const joint=name=>{let found;root.traverse(b=>{if(b.isBone&&b.name.replace(/^mixamorig\d*/,'')===name)found=b;});return found;};
+  const index=joint('RightHandIndex2'),rest=index.quaternion.clone();
+  for(const seated of [0,1])for(const kind of ['thumbsUp','point','no']){
+   root.userData.socialGesture={kind,point:{x:0,y:1.5,z:4},started:performance.now()-1000};root.userData.animate(.01,{seated});assert.equal(root.userData.animation.gesture,kind);root.updateMatrixWorld(true);root.traverse(b=>assert.ok(b.matrixWorld.elements.every(Number.isFinite)));
+   if(kind==='thumbsUp')assert.ok(index.quaternion.angleTo(rest)>.7);
+   if(kind==='point'){const elbow=joint('RightForeArm').getWorldPosition(new THREE.Vector3()),hand=joint('RightHand').getWorldPosition(new THREE.Vector3());assert.ok(hand.sub(elbow).normalize().z>.85);}
+   root.userData.socialGesture=null;root.userData.animate(.01,{seated});assert.ok(index.quaternion.angleTo(rest)<.001,'procedural fingers must not accumulate');
+  }
+ }
+});
 
 test('all three real rigs raise and wave a hand above the head, including when seated',async()=>{
  for(const path of ['../assets/avatars/mixamo/presenter.glb','../assets/avatars/client/client.glb','../assets/avatars/collaborator/collaborator.glb']){

@@ -1,0 +1,32 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><title>Audio loopback QA</title><style>body{font:17px system-ui;padding:30px;background:#f5f8f6;color:#153d34}button{padding:15px}pre{white-space:pre-wrap}</style><h1>Verificación local de audio</h1><p>Conexión WebRTC real entre dos pares. Señal sintética, sin acceso al micrófono, sin sonido en parlantes, sin escena 3D.</p><button id="run">Probar audio</button><pre id="result">Listo</pre><script type="module">
+import {createPeerSignaling} from '/src/peer-signaling.js';
+import {createPeerAudio} from '/src/peer-audio.js';
+import {processMicrophone} from '/src/microphone-processing.js';
+import {createVisitAudioOutput} from '/src/visit-audio-output.js';
+const result=document.getElementById('result'),delay=ms=>new Promise(r=>setTimeout(r,ms));
+document.getElementById('run').onclick=async()=>{
+ const a=new RTCPeerConnection({iceServers:[{urls:'stun:stun.cloudflare.com:3478'}]}),b=new RTCPeerConnection({iceServers:[{urls:'stun:stun.cloudflare.com:3478'}]}),c=new AudioContext(),sink=c.createGain(),meter=c.createAnalyser();sink.gain.value=0;sink.connect(c.destination);meter.connect(sink);meter.fftSize=2048;
+ const resumed=c.resume();let filtered,oscillator,localMeter;
+ const adapter={get state(){return c.state;},destination:sink,resume:()=>c.resume(),close:()=>c.close(),createMediaStreamSource:stream=>{const node=c.createMediaStreamSource(stream);node.connect(meter);return node;}};
+ const output=createVisitAudioOutput({Context:function(){return adapter;}});const unlocked=output.unlock();
+ const errors=[],messages=[];let sa,sb,receiver;
+ sa=createPeerSignaling(a,{polite:false,send:m=>{messages.push('A '+m.description?.type);void sb.receive(m);},onError:e=>errors.push(e.message)});sb=createPeerSignaling(b,{polite:true,send:m=>{messages.push('B '+m.description?.type);void sa.receive(m);},onRemoteDescription:()=>receiver.refresh(),onError:e=>errors.push(e.message)});
+ a.onicecandidate=e=>{if(e.candidate)void sb.receive({candidate:e.candidate});};b.onicecandidate=e=>{if(e.candidate)void sa.receive({candidate:e.candidate});};
+ a.onnegotiationneeded=()=>sa.negotiate();b.onnegotiationneeded=()=>sb.negotiate();
+ b.ontrack=e=>{if(e.track.kind==='audio'){const stream=new MediaStream([e.track]),attach=()=>output.remote('presenter',stream);e.track.onunmute=attach;if(!e.track.muted)attach();}};
+ const sender=createPeerAudio(a,{onError:e=>errors.push(e.message)});receiver=createPeerAudio(b,{initiator:false,onError:e=>errors.push(e.message)});
+ try{
+  result.textContent='Negociando audio…';await resumed;await unlocked;
+  const raw=c.createMediaStreamDestination(),level=c.createGain();level.gain.value=.04;oscillator=c.createOscillator();oscillator.frequency.value=190;oscillator.connect(level).connect(raw);oscillator.start();
+  filtered=await processMicrophone(raw.stream,{context:c});localMeter=c.createAnalyser();c.createMediaStreamSource(filtered.stream).connect(localMeter).connect(sink);await sender.set(filtered.stream);void sa.negotiate();
+  for(let i=0;i<80&&b.connectionState!=='connected';i++)await delay(100);
+  if(b.connectionState!=='connected')throw Error('No connected link: '+b.connectionState+' '+errors.join('; '));
+  const samples=new Float32Array(meter.fftSize),rms=()=>{meter.getFloatTimeDomainData(samples);return Math.sqrt(samples.reduce((s,x)=>s+x*x,0)/samples.length);};
+  let first=0;for(let i=0;i<30&&first<.001;i++){await delay(100);first=rms();}if(first<.001)throw Error('Receiver has no signal');
+  await sender.set(null);await delay(400);await sender.set(filtered.stream);let second=0;for(let i=0;i<30&&second<.001;i++){await delay(100);second=rms();}if(second<.001)throw Error('Microphone did not resume');
+  const stats=await a.getStats();let bytes=0;stats.forEach(s=>{if(s.type==='outbound-rtp'&&(s.kind==='audio'||s.mediaType==='audio'))bytes+=s.bytesSent||0;});
+  if(!bytes||errors.length)throw Error('Transport errors: '+errors.join('; '));
+  result.textContent=JSON.stringify({passed:true,processing:filtered.mode,receivedRMS:first,resumedRMS:second,audioBytesSent:bytes,connection:b.connectionState,errors},null,2);
+ }catch(error){const stats=[];for(const pc of [a,b]){const s=await pc.getStats();s.forEach(x=>{if(['outbound-rtp','inbound-rtp','media-source'].includes(x.type))stats.push({type:x.type,kind:x.kind,bytesSent:x.bytesSent,bytesReceived:x.bytesReceived,totalAudioEnergy:x.totalAudioEnergy,audioLevel:x.audioLevel});});}const sample=new Float32Array(2048);localMeter?.getFloatTimeDomainData(sample);result.textContent='FAIL '+error.stack+'\n'+JSON.stringify({context:c.state,errors,messages,states:[a,b].map(pc=>({signaling:pc.signalingState,ice:pc.iceConnectionState,local:pc.localDescription?.type,remote:pc.remoteDescription?.type})),track:sender.sender.track&&{enabled:sender.sender.track.enabled,muted:sender.sender.track.muted,readyState:sender.sender.track.readyState},localRms:Math.sqrt(sample.reduce((s,x)=>s+x*x,0)/sample.length),stats},null,2);}finally{oscillator?.stop();filtered?.destroy();a.close();b.close();output.destroy();}
+};
+</script></html>

@@ -16,3 +16,8 @@ test('occupied chairs, unreachable chairs and blocked stand positions are reject
  const motion=createSeatMotion({blocked:()=>true});motion.occupy(seat);assert.equal(motion.stand(),false);assert.equal(motion.state.phase,'seated');
  assert.equal(seatStandPoint(seat,seat,()=>true),null);
 });
+test('standing and sitting never take the shorter route through a glass wall',()=>{
+ const glass=(x,z)=>x>.18&&x<.32;const exit=seatStandPoint(seat,{x:.7,z:0},glass);assert.ok(exit.x<=0);
+ const motion=createSeatMotion({blocked:glass});assert.equal(motion.sit(seat,{x:.7,z:0}),false);
+ motion.occupy(seat);assert.ok(motion.stand());let final;for(let i=0;i<14;i++){const p=motion.update(.1);if(p){assert.equal(glass(p.x,p.z),false);final=p;}}assert.ok(final.x<0);
+});

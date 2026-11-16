@@ -5,6 +5,7 @@ function clear(a,b,blocked){
 }
 // Route the visitor around office furniture. Never move across a blocked segment.
 export function findFollowPath(start,goal,blocked){
+ if(blocked(start.x,start.z)||blocked(goal.x,goal.z))return [];
  if(clear(start,goal,blocked))return [{...goal}];
  const step=.35,key=(x,z)=>x+','+z,queue=[{x:0,z:0,g:0}],seen=new Map([[key(0,0),{x:start.x,z:start.z,parent:null}]]);
  let end=null;
@@ -25,7 +26,7 @@ export function createClientFollower({distance=1.85}={}){
  let path=[],goal=null,replan=0;
  return {reset(){path=[];goal=null;replan=0;},update(dt,client,presenter,blocked){
   replan-=dt;
-  if(!goal||replan<=0&&(Math.hypot(presenter.x-goal.x,presenter.z-goal.z)>.3||!path.length)||path[0]&&!clear(client,path[0],blocked)){
+  if(replan<=0&&(!goal||Math.hypot(presenter.x-goal.x,presenter.z-goal.z)>.3||!path.length||path[0]&&!clear(client,path[0],blocked))){
    goal={x:presenter.x,z:presenter.z};path=findFollowPath(client,goal,blocked);replan=.55;
   }
   let remaining=0,previous=client;for(const p of path){remaining+=Math.hypot(p.x-previous.x,p.z-previous.z);previous=p;}
@@ -35,7 +36,7 @@ export function createClientFollower({distance=1.85}={}){
    const target=path[0],distance=Math.hypot(target.x-x,target.z-z),amount=Math.min(distance,budget);
    if(distance<.001){path.shift();continue;}
    const nx=x+(target.x-x)*amount/distance,nz=z+(target.z-z)*amount/distance;
-   if(!clear({x,z},{x:nx,z:nz},blocked)){path=[];goal=null;break;}
+   if(!clear({x,z},{x:nx,z:nz},blocked)){path=[];replan=Math.max(replan,.2);break;}
    direction=Math.atan2(nx-x,nz-z);x=nx;z=nz;budget-=amount;travel+=amount;if(amount>=distance-.001)path.shift();
   }
   return {x,z,speed:travel/Math.max(dt,.001),direction,waiting:false};
