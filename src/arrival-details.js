@@ -4,11 +4,13 @@ import {renderProfile} from './render-profile.js';
 import {registerPlanarReflection} from './planar-reflections.js';
 import {arrival,entryBrandWall,entryVestibule} from './arrival-layout.js';
 
-export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,label,white,steel,black,finish,glow,brandMat,solids,plant}){
- const wood=finish.wood,chrome=mat('#c9cbc9',{metalness:1,roughness:.17});
- const liftSteel=steel.clone();liftSteel.roughness=.72;liftSteel.bumpScale=.00004;
- const jamb=mat('#8d9392',{metalness:.8,roughness:.28});
+export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,label,white,steel,black,arrivalFinish,glow,solids,contact}){
+ const {veneer:wood,chrome,brushed:liftSteel,polished:jamb,enamel}=arrivalFinish;
  const mirrorObjects=[];
+ // The active C14 portal sits on the hall face, clear of the sliding opening.
+ for(const x of [-1.027,1.027])rounded(.14,2.39,.065,x,1.195,2.558,jamb,group,.01);
+ rounded(2.20,.15,.065,0,2.375,2.558,jamb,group,.01);
+ label('C14',.16,.09,-.84,2.45,2.522,Math.PI,'#e8e7e0','#273047',170);
  // Closed facade details project into the hall. Keep the open office entry clear.
  for(const [x1,x2] of [[-2,-.95],[.95,9]])solids.push({x1,x2,z1:2.42,z2:2.61,bottom:0,top:2.55});
  for(const [x1,x2] of [[-2,5.8],[8.1,9]])solids.push({x1,x2,z1:0,z2:.17,bottom:0,top:2.55});
@@ -23,18 +25,21 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
   cylinder(.012,1.02,x,y,z+side*.035,chrome,parent);
   const rose=cylinder(.026,.012,x+.08,y-.04,z,chrome,parent);rose.rotation.x=Math.PI/2;
  }
- function wallBay(x,side,width){
+ function wallBay(x,side){
   const g=new THREE.Group();g.position.set(x,0,side==='far'?2.50:.12);g.rotation.y=side==='far'?Math.PI:0;group.add(g);
   return g;
  }
  for(const lift of arrival.lifts){
   if(lift.id==='C14')continue; // Animated cabin and doors, outside the static batch.
-  const g=wallBay(lift.x,lift.side,2.35);
+  const g=wallBay(lift.x,lift.side);
   box(2.35,2.42,.07,0,1.21,0,liftSteel,false,g);
   for(const side of [-1,1]){
-   box(.86,2.17,.025,side*.438,1.085,.048,liftSteel,false,g);
-   box(.20,2.42,.04,side*1.27,1.21,-.008,chrome,false,g);
+   rounded(.86,2.17,.025,side*.438,1.085,.048,liftSteel,g,.004);
+   rounded(.20,2.42,.05,side*1.27,1.21,.004,jamb,g,.007);
+   box(.016,2.17,.012,side*.885,1.085,.057,black,false,g);
   }
+  box(1.79,.028,.014,0,2.181,.058,black,false,g);
+  rounded(1.95,.082,.06,0,2.235,.029,jamb,g,.008);
   box(.012,2.17,.008,0,1.085,.066,black,false,g);
   box(1.76,.028,.16,0,.014,.018,mat('#202625',{metalness:.55,roughness:.35}),false,g);
   // Red display in a brushed surround, nameplate and recessed call buttons.
@@ -45,7 +50,7 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
   for(const y of [.99,1.10]){const b=cylinder(.013,.009,1.01,y,.066,steel,g);b.rotation.x=Math.PI/2;}
  }
  for(const door of arrival.woodDoors){
-  const g=wallBay(door.x,door.side,door.width);
+  const g=wallBay(door.x,door.side);
   box(door.width,2.43,.11,0,1.215,0,wood,false,g);
   for(const side of [-1,1])box(.08,2.43,.15,side*(door.width/2+.04),1.215,-.012,wood,false,g);
   box(door.width+.16,.08,.15,0,2.47,-.012,wood,false,g);
@@ -94,7 +99,10 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
   box(.016,.035,.012,-door.handleSide*.70,1.145,.032,steel,false,g);
  }
  // Continuous grey skirting and brushed headers, rather than isolated flat blocks.
- for(const z of [.016,2.579])box(10.8,.105,.018,3.5,.052,z,mat('#b2b1a9',{roughness:.65}));
+ const skirting=mat('#b2b1a9',{roughness:.65});
+ for(const [x1,x2,z] of [[-1.9,5.8,.016],[8.1,8.9,.016],[-1.9,-.96,2.579],[.96,8.9,2.579]]){
+  box(x2-x1,.105,.018,(x1+x2)/2,.052,z,skirting);
+ }
  for(const x of [-1.985,8.985])for(const z of [.30,2.30])box(.018,.105,.57,x,.052,z,mat('#b2b1a9'));
  for(const z of [.02,2.58])box(10.9,.12,.10,3.5,2.67,z,white);
  // Detectors, sprinkler heads and security camera visible in the two hallway photos.
@@ -109,7 +117,7 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
  const vestibule=entryVestibule,returnDepth=vestibule.z2-vestibule.z1,returnZ=(vestibule.z1+vestibule.z2)/2;
  const returnFace=vestibule.x+vestibule.thickness/2;
  box(vestibule.thickness,vestibule.height,returnDepth,vestibule.x,vestibule.height/2,returnZ,white,true);
- rounded(.022,.105,returnDepth,returnFace+.012,.052,returnZ,mat('#aaa9a1'),group,.004);
+ rounded(.022,.105,returnDepth,returnFace+.012,.052,returnZ,jamb,group,.004);
  // Recessed plaster ceiling over the little entry alcove, with perimeter trim.
  box(2.40,.07,returnDepth,6.94,2.82,returnZ,mat('#d2d1c8',{roughness:.95}));
  box(.14,.17,returnDepth,returnFace+.07,2.715,returnZ,white);
@@ -168,8 +176,11 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
   }
   c.font='bold 190px Arial';c.textAlign='center';c.fillText('Production',cw*.57,ch*.49,cw*.86);
  },renderProfile.mobile?1024:4096,renderProfile.mobile?1024:4096);
- graphic.anisotropy=16;
- faceTexture(graphic,w,2.43,(b.x1+b.x2)/2,1.315,b.z-.002,Math.PI);
+ graphic.anisotropy=renderProfile.mobile?4:8;
+ const branding=faceTexture(graphic,w,2.43,(b.x1+b.x2)/2,1.315,b.z-.002,Math.PI);
+ branding.receiveShadow=true;
+ const baseTrim=mat('#aea99e',{roughness:.52,metalness:.25});
+ rounded(w,.080,.025,(b.x1+b.x2)/2,.045,b.z-.017,baseTrim,group,.004);
  box(w,.28,.32,(b.x1+b.x2)/2,2.71,-.16,white);
  const emergencyFirst=group.children.length;
  // Luminaire over the pilaster: a dark housing and translucent illuminated blade.
@@ -207,25 +218,34 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
    solid.x1=Math.min(...points.map(p=>p.x));solid.x2=Math.max(...points.map(p=>p.x));solid.z1=Math.min(...points.map(p=>p.z));solid.z2=Math.max(...points.map(p=>p.z));
   }
  }
+ function furnitureContact(piece){
+  const shadow=new THREE.Mesh(new THREE.PlaneGeometry(piece.width+.38,piece.depth+.27),contact);
+  shadow.rotation.x=-Math.PI/2;shadow.position.set(piece.x,.009,piece.z-.07);group.add(shadow);
+ }
  const cabinet=b.cabinet,cabinetFirst=group.children.length,cabinetSolid=solids.length;
- box(cabinet.width,cabinet.height,cabinet.depth,cabinet.x,cabinet.height/2,cabinet.z,white,true);
+ furnitureContact(cabinet);
+ box(cabinet.width,cabinet.height,cabinet.depth,cabinet.x,cabinet.height/2,cabinet.z,enamel,true);
  box(cabinet.width-.025,.025,cabinet.depth+.025,cabinet.x,cabinet.height+.012,cabinet.z,mat('#ebeae4'));
  for(const s of [-1,1]){
-  rounded(cabinet.width/2-.012,cabinet.height-.055,.018,cabinet.x+s*cabinet.width*.25,cabinet.height/2,cabinet.z-cabinet.depth/2-.012,mat('#e5e5de'),group,.003);
-  cylinder(.008,.23,cabinet.x+s*.028,1.02,cabinet.z-cabinet.depth/2-.032,steel);
+  rounded(cabinet.width/2-.012,cabinet.height-.055,.018,cabinet.x+s*cabinet.width*.25,cabinet.height/2,cabinet.z-cabinet.depth/2-.012,enamel,group,.003);
+  cylinder(.008,.23,cabinet.x+s*.028,1.02,cabinet.z-cabinet.depth/2-.035,chrome);
  }
  for(let i=0;i<4;i++){const file=rounded(.42,.035,.30,cabinet.x+.045,2.06+i*.037,cabinet.z,mat(['#229bad','#387f97','#31b7b8','#b7d3d0'][i]),group,.005);file.rotation.y=(i-1.5)*.04;}
  cylinder(.043,.24,cabinet.x-.22,2.155,cabinet.z+.02,white);
+ box(cabinet.width-.04,.038,.012,cabinet.x,.022,cabinet.z-cabinet.depth/2-.023,black);
  orientFurniture(cabinetFirst,cabinetSolid,cabinet);
  const p=b.printer,printerFirst=group.children.length,printerSolid=solids.length;
- box(p.width,.77,p.depth,p.x,.385,p.z,white,true);
+ furnitureContact(p);
+ box(p.width,.77,p.depth,p.x,.385,p.z,enamel,true);
+ box(p.width-.04,.032,.013,p.x,.022,p.z-p.depth/2-.009,black);
  for(const y of [.23,.52]){box(p.width-.045,.012,.008,p.x,y,p.z-p.depth/2-.006,mat('#babdb8'));rounded(.12,.016,.021,p.x,y+.09,p.z-p.depth/2-.020,steel,group,.004);}
- rounded(.61,.42,.55,p.x,.99,p.z,mat('#e3e5df'),group,.022);
+ rounded(.61,.42,.55,p.x,.99,p.z,enamel,group,.022);
  rounded(.58,.055,.49,p.x,1.224,p.z+.015,black,group,.009);
  box(.43,.015,.31,p.x,1.262,p.z+.055,white);
  rounded(.19,.055,.13,p.x-.24,1.13,p.z-.28,black,group,.006);
  const display=box(.12,.006,.08,p.x-.24,1.161,p.z-.28,mat('#7cabb5'));display.rotation.x=.15;
  box(.38,.035,.24,p.x,.88,p.z-.32,black);
+ for(let i=0;i<5;i++)box(.081,.007,.004,p.x+.218,.945+i*.017,p.z-.276,black);
  orientFurniture(printerFirst,printerSolid,p);
  // Room 01's plant belongs behind its glass, built with the meeting furniture.
  // Rotate the entire return elevation and all its collisions together. The door

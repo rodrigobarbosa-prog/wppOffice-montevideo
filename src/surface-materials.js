@@ -22,6 +22,34 @@ function surface(size,sample,repeat=[1,1]){
  }
  return {map:texture(color,true),bumpMap:texture(height,false),roughnessMap:texture(rough,false)};
 }
+export function createArrivalFinishes({steel,wood,tile}){
+ const stone=surface(512,(x,y,s)=>{
+  const u=x/s,v=y/s;
+  const warp=noise(u*4,v*4)*.26+noise(u*11,v*10)*.045;
+  const layers=noise((u+v*.34+warp)*13,v*3);
+  const fleck=hash(x,y);
+  const grains=(noise(u*165,v*125)-.5)*5+(fleck>.989?12:fleck<.013?-10:0);
+  const shade=(layers-.5)*17+(noise(u*31,v*36)-.5)*6+grains;
+  return [209+shade,202+shade,188+shade,128+grains,185+(layers-.5)*23];
+ });
+ const porcelain=new THREE.MeshPhysicalMaterial({...stone,roughness:.56,bumpScale:.00024,clearcoat:.23,clearcoatRoughness:.28});
+ const border=porcelain.clone();border.color.set('#b5b2aa');border.roughness=.68;
+ const cabinFloor=porcelain.clone();cabinFloor.color.set('#908e86');cabinFloor.roughness=.78;
+ const brushed=steel.clone();brushed.color.set('#e1e3e3');brushed.roughness=.69;brushed.metalness=.87;
+ const polished=brushed.clone();polished.color.set('#f6f5ef');polished.roughness=.43;
+ const veneer=wood.clone();veneer.color.set('#dfc8ad');veneer.roughness=.77;veneer.clearcoat=.26;
+ const enamel=tile.clone();enamel.color.set('#efefeb');enamel.roughness=.8;enamel.clearcoat=.19;
+ const chrome=new THREE.MeshStandardMaterial({color:'#c6c9c7',metalness:.92,roughness:.24});
+ const diffuser=new THREE.MeshStandardMaterial({color:'#fff4db',emissive:'#ffe9c4',emissiveIntensity:1.65,roughness:.46});
+ return {porcelain,border,cabinFloor,brushed,polished,veneer,enamel,chrome,diffuser,
+  setEnvironment(texture){
+   for(const metal of [brushed,polished,chrome]){
+    metal.envMap=texture;metal.envMapIntensity=.75;metal.needsUpdate=true;
+   }
+  }
+ };
+}
+
 export function createSurfaceMaterials(){
  const carpet=surface(1024,(x,y,s)=>{
   const tile=s/4,tx=Math.floor(x/tile),ty=Math.floor(y/tile),vertical=(tx+ty)%2===0;

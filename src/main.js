@@ -62,13 +62,15 @@ try{
  const scene=new THREE.Scene();scene.background=new THREE.Color('#c5dce6');scene.fog=new THREE.Fog('#c5dce6',350,1800);
  camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.08,2800);camera.rotation.order='YXZ';
  loading.set('office',0,'Loading the office…');world=await buildRouteWorld(scene);loading.set('office',1,'Office ready');loadStage='lighting';loading.set('lighting',0,'Preparing lighting and reflections…');
+ const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(renderer),env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.55;world.setArrivalEnvironment(env.texture);room.dispose();
  if(loadingInLift){camera.position.set(liftArrival.client.x,eyeHeight,liftArrival.client.z);camera.rotation.set(liftArrival.client.pitch,liftArrival.client.yaw,0);world.arrivalLift.set(0,10);renderer.render(scene,camera);$('lift-loading-preview').hidden=true;canvas.dataset.loadingPreview='live';}
- const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(renderer),env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.55;room.dispose();
  // Bake one reflection probe of this actual static office for metals, glass and varnish.
  if(renderProfile.reflectionProbe){const reflectionTarget=new THREE.WebGLCubeRenderTarget(128,{type:THREE.HalfFloatType});
  const reflectionCamera=new THREE.CubeCamera(.08,80,reflectionTarget);reflectionCamera.position.set(-6.6,1.7,-6);reflectionCamera.update(renderer,scene);
  const officeEnvironment=pmrem.fromCubemap(reflectionTarget.texture);scene.environment=officeEnvironment.texture;scene.environmentIntensity=.7;
- env.dispose();reflectionTarget.dispose();}pmrem.dispose();
+ window.addEventListener('pagehide',()=>officeEnvironment.dispose(),{once:true});
+ reflectionTarget.dispose();}pmrem.dispose();
+ window.addEventListener('pagehide',()=>env.dispose(),{once:true});
  loading.set('lighting',1,'Lighting ready');loadStage='people';loading.set('people',0,'Loading your presenter and visitors…');
  const visuals=createVisuals(renderer,scene,camera,(mode='smooth')=>{high=mode!=='smooth';$('quality').textContent='Image: '+mode;});
  // One model and one transcoder worker at a time, including desktop. Brian is
@@ -122,6 +124,8 @@ try{
   sala01:{x:6.25,z:-6.7,yaw:-1.96,pitch:-.07},
   pantallaSala01:{x:10.6,z:-6.5,yaw:-.78,pitch:.04},
   presentador:{x:7.5,z:-.5,yaw:1.55,pitch:-.04},
+  cabina:{x:-.36,z:4.37,yaw:-.26,pitch:.12},
+  recepcion:{x:6.02,z:-1.36,yaw:-1.35,pitch:-.12},
   colaborador:{x:collaboratorStation.x+1.7,z:collaboratorStation.z+1.6-officeShiftZ,yaw:.9,pitch:-.18},
   salasAlineadas:{x:6.9,z:-7.9,yaw:-Math.PI/2,pitch:-.025},
   puestosRetirados:{x:8.1,z:-6.4,yaw:0,pitch:-.06},
@@ -139,7 +143,7 @@ try{
   hallEspejos:{x:6.8,z:1.3,yaw:Math.PI/2,pitch:.035}
  };
  // Review cameras follow the translated office; hall and entry cameras stay fixed.
- const fixedReviews=new Set(['madera','plantaEntrada','pasillo2Marca','entrada','pasilloContinuo','paredEntrada','hallBanos','hallEspejos']);
+ const fixedReviews=new Set(['recepcion','cabina','madera','plantaEntrada','pasillo2Marca','entrada','pasilloContinuo','paredEntrada','hallBanos','hallEspejos']);
  for(const [name,view] of Object.entries(reviewViews))if(!fixedReviews.has(name))view.z+=officeShiftZ;
  const reviewView=new URL(location.href).searchParams.get('vista'),previewOffice=Object.hasOwn(reviewViews,reviewView);
  const initialView=previewOffice?reviewViews[reviewView]:liftArrival.client;
