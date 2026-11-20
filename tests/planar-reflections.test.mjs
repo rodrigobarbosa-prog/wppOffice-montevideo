@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {reflectionGate,registerPlanarReflection} from '../src/planar-reflections.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {includeInArrivalReflection,reflectionGate,registerPlanarReflection} from '../src/planar-reflections.js';
 test('shared guard prevents nested cabin/hall rendering and restores hidden states after a failure',()=>{
  const scene={children:[]},renderer={},camera={matrixWorld:{elements:Array(16).fill(0)}},matrixWorld={elements:Array(16).fill(0)};let calls=0;
  const a={visible:true,matrixWorld,onBeforeRender(){calls++;b.onBeforeRender(renderer,scene,camera);throw Error('test render');}},b={visible:true,matrixWorld,onBeforeRender(){calls++;}};
@@ -23,4 +23,15 @@ test('arrival mirrors skip reflection passes through the office wall',()=>{
  camera.matrixWorld=matrix(2,1.68,1.3);
  mirror.onBeforeRender(renderer,scene,camera);
  assert.equal(draws,1);
+});
+test('hall reflection camera selects arrival objects and keeps those objects visible in the main view',()=>{
+ const layers=()=>({mask:1,enable(channel){this.mask|=1<<channel;},set(channel){this.mask=1<<channel;}});
+ const mesh={layers:layers()},office={layers:layers()};
+ const root={layers:layers(),traverse(visit){visit(this);visit(mesh);}};
+ const mirror={camera:{layers:layers()},onBeforeRender(){}};
+ includeInArrivalReflection(root);
+ registerPlanarReflection({children:[]},mirror,{arrivalOnly:true});
+ assert.equal(mesh.layers.mask&1,1);
+ assert.notEqual(mesh.layers.mask&mirror.camera.layers.mask,0);
+ assert.equal(office.layers.mask&mirror.camera.layers.mask,0);
 });

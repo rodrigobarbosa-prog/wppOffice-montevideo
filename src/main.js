@@ -10,6 +10,7 @@ import {createBackgroundMusic} from './background-music.js';
 import {configureAvatarAssets} from './avatar-assets.js';
 import {createProgressiveAvatars,prepareAvatar} from './progressive-avatars.js';
 import {createShadowRefresh} from './shadow-refresh.js';
+import {includeInArrivalReflection} from './planar-reflections.js';
 import {createPoseRate} from './pose-rate.js';
 import {createSeatMotion} from './seating.js';
 import {createFollowSeating} from './follow-seating.js';
@@ -87,7 +88,7 @@ try{
  if(isolatedReview&&high)high=visuals.quality(false);
  // One model and one transcoder worker at a time, including desktop. Brian is
  // prepared after the welcome assets rather than blocking the arrival screen.
- const avatars=createProgressiveAvatars({scene,factories:{presenter:createPresenterAvatar,client:createClientAvatar,collaborator:createCollaboratorAvatar},prepare:root=>prepareAvatar(renderer,root,scene,camera),onState:(person,state)=>{canvas.dataset[person+'Asset']=state;if(state==='ready')renderer.shadowMap.needsUpdate=true;}});
+ const avatars=createProgressiveAvatars({scene,factories:{presenter:createPresenterAvatar,client:createClientAvatar,collaborator:createCollaboratorAvatar},prepare:root=>{includeInArrivalReflection(root);return prepareAvatar(renderer,root,scene,camera);},onState:(person,state)=>{canvas.dataset[person+'Asset']=state;if(state==='ready')renderer.shadowMap.needsUpdate=true;}});
  const {presenter:presenterAvatar,client:clientAvatar,collaborator:collaboratorAvatar}=avatars.people;
  collaboratorAvatar.position.set(collaboratorStation.x,0,collaboratorStation.z);collaboratorAvatar.userData.seated=1;collaboratorAvatar.userData.face(collaboratorStation.yaw);
  await avatars.essentials(requestedRole||'client');

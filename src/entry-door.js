@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {includeInArrivalReflection} from './planar-reflections.js';
 import {createEntryDoorState,entryDoorPlan} from './entry-door-state.js';
 
 export function buildEntryDoor({scene,box,cylinder,rounded,label,wood,steel,black,brandMat}){
@@ -25,7 +26,7 @@ export function buildEntryDoor({scene,box,cylinder,rounded,label,wood,steel,blac
   }
  }
  function sync(){for(let i=0;i<hinges.length;i++)hinges[i].rotation.y=state.panels[i].angle;}
- sync();
+ sync();includeInArrivalReflection(root);
  const actionRay=new THREE.Raycaster(),center=new THREE.Vector2(0,0);
  return {
   aimedAt(camera){camera.updateMatrixWorld();root.updateWorldMatrix(true,true);actionRay.setFromCamera(center,camera);return actionRay.intersectObject(root,true).some(hit=>hit.distance<entryDoorPlan.reach);},

@@ -1,12 +1,18 @@
 import {arrival} from './arrival-layout.js';
 
+const arrivalReflectionLayer=1;
+export function includeInArrivalReflection(root){
+ root.traverse(object=>object.layers.enable(arrivalReflectionLayer));
+}
+
 // One shared reflection guard for hall AND cabin. Independent guards permit
 // mirrors from the two groups to render each other's entire scene recursively.
 const scenes=new WeakMap();
 export function reflectionGate(intervalMs=0){let busy=false,last=-Infinity;return {
  enter(now){if(busy||now-last<intervalMs)return false;busy=true;last=now;return true;},leave(){busy=false;},get busy(){return busy;}
 };}
-export function registerPlanarReflection(scene,mirror,{mobile=false,maxDistance=Infinity}={}){
+export function registerPlanarReflection(scene,mirror,{mobile=false,maxDistance=Infinity,arrivalOnly=false}={}){
+ if(arrivalOnly)mirror.camera.layers.set(arrivalReflectionLayer);
  let state=scenes.get(scene);if(!state){state={mirrors:new Set(),gate:reflectionGate()};scenes.set(scene,state);}state.mirrors.add(mirror);
  const draw=mirror.onBeforeRender,interval=1000/(mobile?15:30);let last=-Infinity;
  mirror.onBeforeRender=function(renderer,s,camera,...args){

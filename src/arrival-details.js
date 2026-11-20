@@ -68,9 +68,9 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
  // Full-height mirror strips in steel frames. Shared guard prevents paired mirrors recursing.
  for(const spec of arrival.mirrors){
   const z=spec.side==='far'?2.491:.151,rotation=spec.side==='far'?Math.PI:0;
-  const mirror=new Reflector(new THREE.PlaneGeometry(spec.width,2.37),{color:0xf0f0eb,textureWidth:renderProfile.mirrorWidth,textureHeight:renderProfile.mobile?256:1024,clipBias:.003,multisample:renderProfile.mirrorSamples});
+  const mirror=new Reflector(new THREE.PlaneGeometry(spec.width,2.37),{color:0xf0f0eb,textureWidth:renderProfile.mobile?128:256,textureHeight:renderProfile.mobile?192:512,clipBias:.003,multisample:0});
   mirror.position.set(spec.x,1.205,z);mirror.rotation.y=rotation;
-  registerPlanarReflection(scene,mirror,{mobile:renderProfile.mobile,maxDistance:renderProfile.mobile?6:14});
+  registerPlanarReflection(scene,mirror,{mobile:renderProfile.mobile,maxDistance:renderProfile.mobile?6:14,arrivalOnly:true});
   mirror.name='Hall mirror';scene.add(mirror);mirrorObjects.push(mirror);
   for(const dx of [-1,1])box(.020,2.43,.055,spec.x+dx*(spec.width/2+.012),1.215,z,chrome);
   for(const y of [.014,2.415])box(spec.width+.045,.022,.055,spec.x,y,z,chrome);

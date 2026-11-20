@@ -13,6 +13,7 @@ import {buildKitchen} from './kitchen.js';
 import {buildArrivalDetails} from './arrival-details.js';
 import {buildEntryDoor} from './entry-door.js';
 import {buildArrivalLift} from './arrival-lift.js';
+import {includeInArrivalReflection} from './planar-reflections.js';
 import {partitionProfile,partitionSpans} from './partition-panels.js';
 
 // Metres. Spatial sequence follows references 01–10; dimensions are estimates.
@@ -463,7 +464,8 @@ export async function buildRouteWorld(scene){
  }
  // Translate all office architecture, furniture, rooms and their collisions as
  // one assembly. The long wall now meets the extinguisher wall at a true 90°.
- for(const object of group.children.slice(officeFirstChild))object.position.z+=officeShiftZ;
+ const officeEndChild=group.children.length;
+ for(const object of group.children.slice(officeFirstChild,officeEndChild))object.position.z+=officeShiftZ;
  for(const solid of solids.slice(officeFirstSolid)){solid.z1+=officeShiftZ;solid.z2+=officeShiftZ;}
  const entryFloorX=entryVestibule.x+entryVestibule.thickness/2;
  carpetFloor(15-entryFloorX,-officeShiftZ,(15+entryFloorX)/2,officeShiftZ/2);
@@ -484,7 +486,10 @@ export async function buildRouteWorld(scene){
  for(const [x,z,color,intensity] of [[-.8,1.30,'#fff0dc',7.5],[4,1.30,'#f5f5ee',7],[7.12,-.42,'#fff0db',12]]){
   const hallLight=new THREE.PointLight(color,intensity,4.8,2);hallLight.position.set(x,2.54,z);scene.add(hallLight);
  }
- // Keep the fixed cabin in separate batches from the hall.
+ // Keep hall geometry available for mirrors without reflecting the full office and port.
+ for(const object of [...group.children.slice(0,officeFirstChild),...group.children.slice(officeEndChild)])includeInArrivalReflection(object);
+ includeInArrivalReflection(arrivalLift.fixed.parent);
+ scene.traverse(object=>{if(object.isLight)includeInArrivalReflection(object);});
  batchOpaqueMeshes(group);
  batchOpaqueMeshes(arrivalLift.fixed);
  const seats=chairRecords.map(record=>{record.group.updateWorldMatrix(true,false);const p=record.group.getWorldPosition(new THREE.Vector3());return {id:record.id,x:p.x,z:p.z,yaw:record.group.rotation.y,height:.50};});
@@ -502,7 +507,7 @@ function batchOpaqueMeshes(root){
  const inverse=root.matrixWorld.clone().invert(),batches=new Map();
  root.traverse(mesh=>{
   if(!mesh.isMesh||mesh.userData.collaboratorScreen||mesh.material.transparent||Array.isArray(mesh.material))return;
-  const key=mesh.material.uuid+':'+Boolean(mesh.geometry.index);
+  const key=[mesh.material.uuid,Boolean(mesh.geometry.index),mesh.layers.mask].join(':');
   if(!batches.has(key))batches.set(key,[]);batches.get(key).push(mesh);
  });
  for(const meshes of batches.values()){
@@ -510,7 +515,7 @@ function batchOpaqueMeshes(root){
   const geometries=meshes.map(mesh=>mesh.geometry.clone().applyMatrix4(inverse.clone().multiply(mesh.matrixWorld)));
   const merged=mergeGeometries(geometries,false);geometries.forEach(geometry=>geometry.dispose());
   if(!merged)continue;
-  const mesh=new THREE.Mesh(merged,meshes[0].material);mesh.castShadow=mesh.receiveShadow=true;root.add(mesh);
+  const mesh=new THREE.Mesh(merged,meshes[0].material);mesh.layers.mask=meshes[0].layers.mask;mesh.castShadow=mesh.receiveShadow=true;root.add(mesh);
   meshes.forEach(part=>part.removeFromParent());
  }
 }
