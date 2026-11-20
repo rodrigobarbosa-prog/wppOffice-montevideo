@@ -1,5 +1,14 @@
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
+export function followCameraAngles(camera,subject,yaw,pitch,dt){
+ const dx=subject.x-camera.x,dz=subject.z-camera.z,distance=Math.hypot(dx,dz);
+ if(distance<.05)return {yaw,pitch};
+ const yawDelta=Math.atan2(-dx,-dz)-yaw;
+ const targetPitch=Math.atan2(subject.y-camera.y,distance);
+ const blend=1-Math.exp(-5*Math.min(dt,.12));
+ return {yaw:yaw+Math.atan2(Math.sin(yawDelta),Math.cos(yawDelta))*blend,pitch:pitch+(targetPitch-pitch)*blend};
+}
+
 // Filter manual input, not the camera's absolute orientation: scripted arrival,
 // following and role changes remain authoritative and never fight an old target.
 // Exponential damping uses seconds, so response does not depend on refresh rate.

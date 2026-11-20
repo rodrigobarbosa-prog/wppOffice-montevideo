@@ -23,21 +23,15 @@ function surface(size,sample,repeat=[1,1]){
  return {map:texture(color,true),bumpMap:texture(height,false),roughnessMap:texture(rough,false)};
 }
 export function createArrivalFinishes({steel,wood,tile}){
- const stone=surface(512,(x,y,s)=>{
-  const u=x/s,v=y/s;
-  const warp=noise(u*4,v*4)*.26+noise(u*11,v*10)*.045;
-  const layers=noise((u+v*.34+warp)*13,v*3);
-  const fleck=hash(x,y);
-  const grains=(noise(u*165,v*125)-.5)*5+(fleck>.989?12:fleck<.013?-10:0);
-  const shade=(layers-.5)*17+(noise(u*31,v*36)-.5)*6+grains;
-  return [209+shade,202+shade,188+shade,128+grains,185+(layers-.5)*23];
- });
- const porcelain=new THREE.MeshPhysicalMaterial({...stone,roughness:.56,bumpScale:.00024,clearcoat:.23,clearcoatRoughness:.28});
- const border=porcelain.clone();border.color.set('#b5b2aa');border.roughness=.68;
- const cabinFloor=porcelain.clone();cabinFloor.color.set('#908e86');cabinFloor.roughness=.78;
- const brushed=steel.clone();brushed.color.set('#e1e3e3');brushed.roughness=.69;brushed.metalness=.87;
+ const porcelain=tile.clone();
+ porcelain.color.set('#fffcf9');
+ porcelain.roughness=.4;porcelain.bumpScale=.000015;
+ porcelain.clearcoat=.42;porcelain.clearcoatRoughness=.15;
+ const border=porcelain.clone();border.color.set('#b2b1b3');border.roughness=.49;
+ const cabinFloor=tile.clone();cabinFloor.color.set('#908e86');cabinFloor.roughness=.84;cabinFloor.clearcoat=.23;
+ const brushed=steel.clone();brushed.color.set('#e3e3e1');brushed.roughness=.62;brushed.metalness=.87;brushed.bumpScale=.000025;
  const polished=brushed.clone();polished.color.set('#f6f5ef');polished.roughness=.43;
- const veneer=wood.clone();veneer.color.set('#dfc8ad');veneer.roughness=.77;veneer.clearcoat=.26;
+ const veneer=wood.clone();veneer.color.set('#e2cfc2');veneer.roughness=.67;veneer.clearcoat=.31;
  const enamel=tile.clone();enamel.color.set('#efefeb');enamel.roughness=.8;enamel.clearcoat=.19;
  const chrome=new THREE.MeshStandardMaterial({color:'#c6c9c7',metalness:.92,roughness:.24});
  const diffuser=new THREE.MeshStandardMaterial({color:'#fff4db',emissive:'#ffe9c4',emissiveIntensity:1.65,roughness:.46});
@@ -50,17 +44,35 @@ export function createArrivalFinishes({steel,wood,tile}){
  };
 }
 
+function carpetSample(x,y,size){
+ const tileSize=size/4;
+ const column=Math.floor(x/tileSize),row=Math.floor(y/tileSize);
+ const tileX=x%tileSize,tileY=y%tileSize,turned=(row+column)%2===1;
+ const across=turned?tileY:tileX,along=turned?tileX:tileY;
+ const yarn=Math.floor(across/3),stitch=Math.floor((along+(yarn%2)*3)/6);
+ const tileId=row*4+column;
+ const strand=hash(yarn,tileId)-.5;
+ const loop=hash(yarn+tileId*89,stitch)-.5;
+ const fibre=hash(x,y)-.5;
+ const edge=Math.min(tileX,tileY,tileSize-1-tileX,tileSize-1-tileY);
+ const joint=Math.max(0,2-edge);
+ const tileTone=(hash(column,row)-.5)*13;
+ const pile=7*strand+13*loop+8*fibre;
+ const shade=tileTone+pile-joint*7;
+ return [119+shade,119+shade,112+shade+2*strand,128+pile*4-joint*11,243+loop*10];
+}
+
+function laminateSample(x,y,size){
+ const pore=hash(x,y)-.5;
+ const grain=(hash(Math.floor(x/2),Math.floor(y/2))-.5)*8;
+ const mottling=(noise(x*32/size,y*32/size)-.5)*4;
+ const fleck=pore>.47?3:pore<-.47?-3:0;
+ const shade=grain+pore*6+mottling+fleck;
+ return [64+shade,69+shade,70+shade,128+grain*5+pore*21,204+grain*2+mottling*3];
+}
+
 export function createSurfaceMaterials(){
- const carpet=surface(1024,(x,y,s)=>{
-  const tile=s/4,tx=Math.floor(x/tile),ty=Math.floor(y/tile),vertical=(tx+ty)%2===0;
-  const a=vertical?x:y,b=vertical?y:x;
-  const weave=Math.sin(a*Math.PI*.72+Math.sin(b*.09)*.5)*4+Math.sin(a*Math.PI*.5+b*.24)*2;
-  const tuft=(hash(Math.floor(a/3),Math.floor(b/7))-.5)*9;
-  const fiber=(hash(x,y)-.5)*14,tileTone=(hash(tx,ty)-.5)*9;
-  const edge=Math.min(x%tile,y%tile,tile-1-x%tile,tile-1-y%tile);
-  const seam=edge<1?-9:edge<3?-3:0,v=weave+fiber+tuft+tileTone+seam;
-  return [119+v,119+v,112+v,128+weave*3+fiber+tuft*2,236+hash(x+4,y)*17];
- },[17,6.8]);
+ const carpet=surface(1024,carpetSample);
  const timber=surface(1024,(x,y,s)=>{
   const u=x/s,v=y/s;
   const bend=(noise(u*4,v*12)-.5)*.018+(noise(u*17,v*27)-.5)*.004;
@@ -70,7 +82,7 @@ export function createSurfaceMaterials(){
   return [129+tone*1.1,70+tone*.8,33+tone*.45,128+(fiber-.5)*9-pores,147+(ribbon-.5)*12+(fiber-.5)*4];
  });
  for(const texture of Object.values(timber))texture.wrapS=texture.wrapT=THREE.MirroredRepeatWrapping;
- const laminate=surface(512,(x,y)=>{const n=(hash(x,y)-.5)*5;return [64+n,69+n,70+n,128+n*5,187+n*3];},[3,1]);
+ const laminate=surface(256,laminateSample);
  const plaster=surface(512,(x,y)=>{
   const n=(hash(x,y)-.5)*5,roller=Math.sin(x*.13+Math.sin(y*.05))*Math.sin(y*.19)*.8;
   return [224+n*.25+roller,224+n*.25+roller,218+n*.25+roller,128+n*5+roller*2,231+n*2];
@@ -83,7 +95,7 @@ export function createSurfaceMaterials(){
  return {
   carpet:make(carpet,{bumpScale:.00085}),
   wood:new THREE.MeshPhysicalMaterial({...timber,roughness:.62,bumpScale:.00009,clearcoat:.45,clearcoatRoughness:.16}),
-  desk:make(laminate,{roughness:.78,bumpScale:.00016}),
+  desk:make(laminate,{roughness:.86,bumpScale:.00022}),
   wall:make(plaster,{bumpScale:.0003}),
   steel:make(brushed,{metalness:.9,roughness:.48,bumpScale:.00022}),
   chair:make(fabric,{bumpScale:.00055}),

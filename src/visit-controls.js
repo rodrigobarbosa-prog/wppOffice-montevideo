@@ -8,22 +8,37 @@ import {visitAudioOutput} from './visit-audio-output.js';
 import {processMicrophone} from './microphone-processing.js';
 import {validSocialGesture} from './social-gesture.js';
 
-export function setupVisitControls({scene,onExplore,onAttention,onGesture=()=>{},onScreenVisit=()=>false}){
+export function setupVisitControls({workstationDisplay,onExplore,onAttention,onGesture=()=>{},onScreenVisit=()=>false}){
  const $=id=>document.getElementById(id),labels={client:'Client',presenter:'Presenter',collaborator:'Brian · Collaborator'};
  let waitingCount=0,stateSequence=0;
  let screenVisit='idle',role='client',following=true,mediaState={mic:false,sharing:false},pose={},localScreen=null,activeScreen=null,screenTexture=null;
- const remotes=new Map(),remoteScreens=new Map(),screenMeshes=[],remoteMotion=createRemoteMotion();
+ const remotes=new Map(),remoteScreens=new Map(),remoteMotion=createRemoteMotion();
+ const video=$('shared-video');
  const params=new URL(location.href).searchParams,joined=params.get('joined')==='1',displayName=(params.get('name')||'').slice(0,40),room=params.get('room')||'office';
  let rejected=false,admitted=!joined||params.get('modo')==='presenter';
- scene.traverse(o=>{if(o.isMesh&&o.userData.collaboratorScreen)screenMeshes.push({mesh:o,material:o.material});});
  const toast=text=>{$('visit-message').textContent=text;$('visit-message').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('visit-message').hidden=true,6500);};
- function attachScreen(){
-  const stream=localScreen||[...remoteScreens].find(([id])=>remotes.get(id)?.role==='collaborator')?.[1]||null;if(stream===activeScreen){update();return;}activeScreen=stream;
-  const video=$('shared-video');video.srcObject=stream;
-  if(stream){video.play().catch(()=>{});screenTexture?.dispose();screenTexture=new THREE.VideoTexture(video);screenTexture.colorSpace=THREE.SRGBColorSpace;
-   for(const {mesh} of screenMeshes)mesh.material=new THREE.MeshBasicMaterial({map:screenTexture});
-  }else{screenTexture?.dispose();screenTexture=null;for(const {mesh,material} of screenMeshes){mesh.material.dispose();mesh.material=material;}}
+ function clearScreenTexture(){
+  workstationDisplay.setLiveTexture(null);
+  screenTexture?.dispose();screenTexture=null;
+ }
+ function syncScreen(){
+  if(activeScreen&&video.readyState>=2){
+   if(!screenTexture){
+    screenTexture=new THREE.VideoTexture(video);
+    screenTexture.colorSpace=THREE.SRGBColorSpace;
+    workstationDisplay.setLiveTexture(screenTexture);
+   }
+  }else if(screenTexture)clearScreenTexture();
   update();
+ }
+ function attachScreen(){
+  const stream=localScreen||[...remoteScreens].find(([id])=>remotes.get(id)?.role==='collaborator')?.[1]||null;
+  if(stream!==activeScreen){
+   clearScreenTexture();
+   activeScreen=stream;video.srcObject=stream;
+   if(stream)video.play().catch(()=>{});
+  }
+  syncScreen();
  }
  function publish(){session.publish({screenVisit,role,name:displayName,mic:mediaState.mic,sharing:mediaState.sharing,joined,...pose,sequence:++stateSequence});}
  function update(){
@@ -40,7 +55,7 @@ export function setupVisitControls({scene,onExplore,onAttention,onGesture=()=>{}
    $('participant-'+name).textContent=labels[name]+(name===role?' · You':peer?' · Connected':' · Not connected')+' · Mic '+(on?'on':'off');
    $('participant-'+name).dataset.mic=String(on);
   }
-  const brian=role==='collaborator'||[...remotes.values()].some(p=>p.role==='collaborator'),video=$('shared-video'),ready=Boolean(activeScreen&&video.readyState>=2);
+  const brian=role==='collaborator'||[...remotes.values()].some(p=>p.role==='collaborator'),ready=Boolean(activeScreen&&video.readyState>=2);
   video.hidden=!ready;$('screen-waiting').hidden=ready;
   $('screen-status').textContent=ready?'Live':activeScreen?'Connecting…':brian?'Connected · Not sharing':'Not connected';
   $('screen-waiting-title').textContent=activeScreen?'Connecting to Brian’s screen':brian?'Brian is connected':'Waiting for Brian';
@@ -74,7 +89,7 @@ export function setupVisitControls({scene,onExplore,onAttention,onGesture=()=>{}
  }
  $('screen-open').onclick=()=>interact('collaborator','screen');
  $('screen-close').onclick=closeScreen;$('workstation-cancel').onclick=closeScreen;
- $('shared-video').addEventListener('loadeddata',update);$('shared-video').addEventListener('emptied',update);
+ for(const event of ['loadeddata','playing','emptied'])video.addEventListener(event,syncScreen);
  $('screen-invite').onclick=async()=>{const link=inviteUrl(location.origin,room,'collaborator');$('screen-invite-link').value=link;try{await navigator.clipboard.writeText(link);toast('Brian’s invitation copied.');}catch{$('screen-invite-link').hidden=false;$('screen-invite-link').focus();$('screen-invite-link').select();}};
  const invitedRole=new URL(location.href).searchParams.get('modo');
  const returnUrl=participantReturnUrl(location.origin,room,invitedRole);
@@ -87,7 +102,7 @@ export function setupVisitControls({scene,onExplore,onAttention,onGesture=()=>{}
  }
  if(joined&&invitedRole==='client'){$('return-lobby').textContent='← Your invitation';$('welcome-lobby').textContent='Back to your invitation';}
  $('follow-toggle').onclick=()=>{following=!following;onExplore(!following);update();};
- window.addEventListener('pagehide',()=>{media.destroy();session.destroy();screenTexture?.dispose();},{once:true});
+ window.addEventListener('pagehide',()=>{media.destroy();session.destroy();clearScreenTexture();workstationDisplay.dispose();},{once:true});
  update();
  return {interact,arriveScreen:showScreen,screenPhase:()=>screenVisit,waitForClient(value,message){$('presenter-waiting').hidden=role!=='presenter'||!value;if(message)$('presenter-waiting').textContent=message;},setRole(next){role=next;media.setRole(next);update();publish();},unlock(){session.unlock();},
   gesture(kind,point){if(validSocialGesture(kind,point))session.attention({kind:'gesture',gesture:kind,point,from:role});},

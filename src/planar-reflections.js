@@ -1,3 +1,5 @@
+import {arrival} from './arrival-layout.js';
+
 // One shared reflection guard for hall AND cabin. Independent guards permit
 // mirrors from the two groups to render each other's entire scene recursively.
 const scenes=new WeakMap();
@@ -9,7 +11,10 @@ export function registerPlanarReflection(scene,mirror,{mobile=false,maxDistance=
  const draw=mirror.onBeforeRender,interval=1000/(mobile?15:30);let last=-Infinity;
  mirror.onBeforeRender=function(renderer,s,camera,...args){
   const now=performance.now();if(s.overrideMaterial||state.gate.busy||now-last<interval)return;
-  const p=this.matrixWorld.elements,c=camera.matrixWorld.elements;
+  const c=camera.matrixWorld.elements;
+  // Mirrors can intersect the camera frustum from the office even though the hall wall hides them.
+  if(c[12]<arrival.x1||c[12]>arrival.x2||c[14]<arrival.z1)return;
+  const p=this.matrixWorld.elements;
   if(Math.hypot(c[12]-p[12],c[13]-p[13],c[14]-p[14])>maxDistance)return;
   if(!state.gate.enter(now))return;last=now;
   const hidden=[],selves=[];

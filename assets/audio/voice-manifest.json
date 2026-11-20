@@ -1,5 +1,5 @@
 {
-  "profile": "2026-11-20-tour-copy",
+  "profile": "2026-11-20-tour-v2",
   "voice": "bm_fable",
   "sampleRate": 24000,
   "processing": "70 Hz high-pass, +1.5 dB presence, speech-level matching, -1.5 dBFS peak ceiling; no pitch/time conversion",
@@ -38,10 +38,10 @@
       "file": "tour-en-office.wav",
       "voice": "bm_fable",
       "language": "en-gb",
-      "text": "This is where ideas take shape. We work side by side, so it\u2019s easy to share ideas and lend a hand.",
-      "duration": 6.062,
-      "peakDb": -1.81,
-      "rmsDb": -22.19,
+      "text": "Teams sit together here, so it\u2019s easy to ask a quick question or lend a hand.",
+      "duration": 4.471,
+      "peakDb": -2.95,
+      "rmsDb": -22.26,
       "clippedSamples": 0
     },
     {

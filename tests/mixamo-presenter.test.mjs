@@ -154,8 +154,42 @@ test('Brian stays seated with grounded feet when his model loads after the atten
  brian.traverse(o=>{if(/^mixamorig\d*Hips$/.test(o.name))hip=o;if(/^mixamorig\d*LeftLeg$/.test(o.name))leftKnee=o;if(/^mixamorig\d*LeftFoot$/.test(o.name))leftFoot=o;});
  for(let i=0;i<120;i++){brian.userData.animate(1/30);brian.updateMatrixWorld(true);brian.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));}
  const h=hip.getWorldPosition(new THREE.Vector3()),k=leftKnee.getWorldPosition(new THREE.Vector3()),f=leftFoot.getWorldPosition(new THREE.Vector3());
- assert.ok(Math.abs(h.y-.55)<.02);assert.ok(Math.abs(h.y-k.y)<.12);assert.ok(k.y-f.y>.3);assert.ok(f.y>0&&f.y<.1);
+ assert.ok(Math.abs(h.y-.55)<.02);assert.ok(Math.abs(h.y-k.y)<.12);assert.ok(k.y-f.y>.3);assert.ok(f.y>.1&&f.y<.15);
  assert.equal(brian.userData.animation.gesture,'seated');assert.equal(brian.userData.presentation.source,'Adobe Mixamo / Brian');
+});
+
+test('all three seated avatars keep both shoe soles level with the floor',async()=>{
+ const characters=[
+  ['collaborator/collaborator',/Sneakers/],
+  ['mixamo/presenter',/Shoes/],
+  ['client/client',/^mesh_4$/]
+ ];
+ for(const [name,shoes] of characters)for(const suffix of ['', '-mobile']){
+  const root=buildMixamoPresenter(new THREE.Scene(),await load('../assets/avatars/'+name+suffix+'.glb'));
+  root.userData.animate(0,{seated:1});root.updateMatrixWorld(true);
+  const shoe=[];
+  root.traverse(mesh=>{if(mesh.isSkinnedMesh&&shoes.test(mesh.name))shoe.push(mesh);});
+  assert.ok(shoe.length,name+suffix+' has a shoe mesh');
+  for(const side of ['Left','Right']){
+   const points=[],point=new THREE.Vector3();
+   for(const mesh of shoe){
+    const skin=mesh.geometry.attributes.skinIndex,weight=mesh.geometry.attributes.skinWeight;
+    for(let i=0;i<skin.count;i++){
+     let footWeight=0;
+     for(let j=0;j<4;j++){
+      const joint=mesh.skeleton.bones[skin.getComponent(i,j)]?.name||'';
+      if(joint.includes(side+'Foot')||joint.includes(side+'Toe'))footWeight+=weight.getComponent(i,j);
+     }
+     if(footWeight>.7)points.push(mesh.localToWorld(mesh.getVertexPosition(i,point)).clone());
+    }
+   }
+   assert.ok(points.length>0);
+   const front=Math.max(...points.map(p=>p.z)),back=Math.min(...points.map(p=>p.z)),edge=(front-back)*.2;
+   const heel=Math.min(...points.filter(p=>p.z<back+edge).map(p=>p.y));
+   const toe=Math.min(...points.filter(p=>p.z>front-edge).map(p=>p.y));
+   assert.ok(heel>=-.006&&heel<.02&&toe>=-.006&&toe<.027,name+suffix+' '+side+' heel '+heel+' toe '+toe);
+  }
+ }
 });
 
 test('presenter and Brian can use the same seated pose and return to standing',async()=>{

@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three.module.js';
-import {applySeatedPose} from './seated-pose.js';
+import {prepareSeatedPose} from './seated-pose.js';
 import {applyAttentionGesture} from './attention-gesture.js';
 import {renderProfile} from './render-profile.js';
 import {applySocialGesture,isPointing,pointTurnAngle} from './social-gesture.js';
@@ -28,6 +28,7 @@ export function buildMixamoPresenter(scene,gltf,{client=false,root=new THREE.Gro
  });
  const shadow=new THREE.Mesh(new THREE.CircleGeometry(.30,64),new THREE.MeshBasicMaterial({color:'#18232a',transparent:true,opacity:.10,depthWrite:false}));
  shadow.rotation.x=-Math.PI/2;shadow.position.y=.008;root.add(shadow);
+ const seatPose=prepareSeatedPose(root,visual.scale.x);
  const mixer=new THREE.AnimationMixer(model),actions=Object.fromEntries(gltf.animations.map(clip=>[clip.name,mixer.clipAction(clip)]));
  for(const name of ['idle','walk','welcome','explain'])if(!actions[name])throw new Error('Missing presenter animation: '+name);
  actions.welcome.setLoop(THREE.LoopOnce,1);actions.welcome.clampWhenFinished=true;
@@ -60,7 +61,7 @@ export function buildMixamoPresenter(scene,gltf,{client=false,root=new THREE.Gro
    root.updateMatrixWorld(true);head.getWorldQuaternion(world);head.parent.getWorldQuaternion(parentWorld);
    turn.setFromAxisAngle(axisY,headYaw);world.premultiply(turn);head.quaternion.copy(parentWorld.invert().multiply(world));
   }
-  root.userData.animation={gesture:next,speed,phase,speaking};applySeatedPose(root,seated,visual.scale.x);
+  root.userData.animation={gesture:next,speed,phase,speaking};seatPose(seated);
   if(!pointing)applyAttentionGesture(root,(now-(root.userData.actionUntil||0)+3200)/1000);
   applySocialGesture(root,social,now,seated>.5?turnAngle:0);
  };

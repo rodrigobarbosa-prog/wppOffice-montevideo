@@ -7,6 +7,7 @@ import {entryVestibule,entryBrandWall} from './arrival-layout.js';
 import {createArrivalFinishes,createSurfaceMaterials} from './surface-materials.js';
 import {ceilingPlan} from './ceiling-layout.js';
 import {buildHarbor} from './harbor.js';
+import {buildWestWindowLighting} from './west-window-lighting.js';
 import {buildMeetingRooms} from './meeting-rooms.js';
 import {buildKitchen} from './kitchen.js';
 import {buildArrivalDetails} from './arrival-details.js';
@@ -41,8 +42,21 @@ export async function buildRouteWorld(scene){
  const group=new THREE.Group();scene.add(group);
  const roundedCache=new Map();
  function rounded(w,h,d,x,y,z,m,parent=group,r=.018){
-  const radius=Math.min(r,w*.49,h*.49,d*.49),key=[w,h,d,radius].join(',');
-  if(!roundedCache.has(key))roundedCache.set(key,new RoundedBoxGeometry(w,h,d,2,radius));
+  const radius=Math.min(r,w*.49,h*.49,d*.49),worktop=m===desk;
+  const key=[w,h,d,radius,worktop].join(',');
+  if(!roundedCache.has(key)){
+   const geometry=new RoundedBoxGeometry(w,h,d,2,radius);
+   if(worktop){
+    // Map the laminate at the same scale on short, long and rotated desks.
+    const uv=geometry.attributes.uv,repeatsPerMetre=1.6;
+    const faceDimensions=[[d,h],[d,h],[w,d],[w,d],[w,h],[w,h]];
+    for(const {start,count,materialIndex} of geometry.groups){
+     const [width,height]=faceDimensions[materialIndex];
+     for(let i=start;i<start+count;i++)uv.setXY(i,uv.getX(i)*width*repeatsPerMetre,uv.getY(i)*height*repeatsPerMetre);
+    }
+   }
+   roundedCache.set(key,geometry);
+  }
   const mesh=new THREE.Mesh(roundedCache.get(key),m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=true;parent.add(mesh);return mesh;
  }
  function box(w,h,d,x,y,z,m=white,solid=false,parent=group){
@@ -76,6 +90,12 @@ export async function buildRouteWorld(scene){
   const mesh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texture,transparent:!bg}));mesh.position.set(x,y,z);mesh.rotation.y=rotation;group.add(mesh);return mesh;
  }
  const carpet=finish.carpet,ceiling=finish.ceiling;
+ function carpetFloor(width,depth,x,z,zOffset=0){
+  const mesh=box(width,.13,depth,x,-.065,z,carpet);
+  const {position,uv}=mesh.geometry.attributes;
+  // Each repeat contains four 50 cm tiles per axis. Match both sides of the office entrance.
+  for(let i=0;i<uv.count;i++)uv.setXY(i,(x+position.getX(i)-officeWest)/2,-(z+position.getZ(i)+zOffset)/2);
+ }
  const glass=new THREE.MeshStandardMaterial({color:'#dce9e5',transparent:true,opacity:.16,roughness:.09,metalness:.05,depthWrite:false,side:THREE.DoubleSide,forceSinglePass:true});
  const frostMap=map((c,w,h)=>{
   const g=c.createLinearGradient(0,0,0,h);g.addColorStop(0,'#9cc7c8');g.addColorStop(.5,'#a5cdcd');g.addColorStop(1,'#5a969c');c.fillStyle=g;c.fillRect(0,0,w,h);
@@ -83,12 +103,12 @@ export async function buildRouteWorld(scene){
  },512,512);
  const frosted=new THREE.MeshStandardMaterial({map:frostMap,color:'#dce9e5',roughness:.48,metalness:.08,emissive:'#6d9999',emissiveIntensity:.1});
  // Hall: cream centre strip, grey borders, three steel lifts and opposite artwork.
- const grout=mat('#9c978b',{roughness:.94});
- box(11,.12,2.6,3.5,-.06,1.3,grout);
+ const grout=mat('#b3ada4',{roughness:.94});
+ box(11,.12,2.6,3.5,-.05,1.3,grout);
  for(let col=0;col<14;col++){
   const left=-2+col*.8,width=Math.min(.8,9-left),x=left+width/2;
   for(const [z,depth,material] of [[0,.65,arrivalFinish.border],[.65,.65,arrivalFinish.porcelain],[1.3,.65,arrivalFinish.porcelain],[1.95,.65,arrivalFinish.border]]){
-   const tile=rounded(width-.004,.022,depth-.004,x,.001,z+depth/2,material,group,.002);
+   const tile=rounded(width-.002,.022,depth-.002,x,.001,z+depth/2,material,group,.001);
    if(col%2)tile.rotation.y=Math.PI;
   }
  }
@@ -122,8 +142,7 @@ export async function buildRouteWorld(scene){
  // Office shell: room sequence follows entry (06), overview (07), aisle (08–10).
  const officeFirstChild=group.children.length,officeFirstSolid=solids.length;
  const officeWidth=15-officeWest,officeCenter=(officeWest+15)/2;
- for(const texture of [carpet.map,carpet.bumpMap,carpet.roughnessMap])texture.repeat.x=officeWidth/2;
- box(officeWidth,.13,13.6,officeCenter,-.065,-6.8,carpet);
+ carpetFloor(officeWidth,13.6,officeCenter,-6.8,officeShiftZ);
  // Split the south wall around a genuine open kitchen alcove.
  for(const [x1,x2] of [[officeWest,kitchen.x1],[kitchen.x2,5.8]])box(x2-x1,2.85,.14,(x1+x2)/2,1.425,-.07,white,true);
  box(kitchen.x2-kitchen.x1,2.85-kitchen.openingHeight,.14,(kitchen.x1+kitchen.x2)/2,(2.85+kitchen.openingHeight)/2,-.07,white);
@@ -143,12 +162,12 @@ export async function buildRouteWorld(scene){
  box(.14,.8,13.6,officeWest-.07,.4,-6.8,white,true);
  const westWindowBays=[];
  for(let z=-13.6;z<kitchenWindowBay.z1-.01;z+=1.55)westWindowBays.push({z1:z,z2:Math.min(z+1.55,kitchenWindowBay.z1)});
- westWindowBays.push(kitchenWindowBay);
+ westWindowBays.push({...kitchenWindowBay});
  for(const [i,bay] of westWindowBays.entries()){
   const z=bay.z1,span=bay.z2-z,center=z+span/2;
   box(.025,1.95,span-.045,officeWest-.08,1.8,center,glass);
   box(.08,2.85,.045,officeWest-.03,1.425,z,trim);
-  const height=[1.04,1.28,.5,1.12][i%4];
+  const height=[1.04,1.28,.5,1.12][i%4];bay.blindHeight=height;
   const roll=cylinder(.025,span-.045,officeWest+.04,2.76,center,white);roll.rotation.x=Math.PI/2;
   box(.018,height,span-.045,officeWest+.04,2.74-height/2,center,mat('#d7d4c7',{transparent:true,opacity:.83,roughness:.92}));
   rounded(.025,.018,span-.045,officeWest+.05,2.74-height,center,trim,group,.006);
@@ -449,7 +468,7 @@ export async function buildRouteWorld(scene){
  for(const object of group.children.slice(officeFirstChild))object.position.z+=officeShiftZ;
  for(const solid of solids.slice(officeFirstSolid)){solid.z1+=officeShiftZ;solid.z2+=officeShiftZ;}
  const entryFloorX=entryVestibule.x+entryVestibule.thickness/2;
- box(15-entryFloorX,.13,-officeShiftZ,(15+entryFloorX)/2,-.065,officeShiftZ/2,carpet);
+ carpetFloor(15-entryFloorX,-officeShiftZ,(15+entryFloorX)/2,officeShiftZ/2);
  ceilingGrid(-2,9,0,2.6,2.75,true);
  ceilingGrid(entryFloorX,15,officeShiftZ,0,2.85);
  buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,label,white,steel,black,arrivalFinish,glow,solids,contact:library.contact});
@@ -460,9 +479,9 @@ export async function buildRouteWorld(scene){
  // Close the short recessed connection to the translated room frontage.
  const roomFront=entryBrandWall.origin.x+entryBrandWall.returnDepth;
  box(.14,2.85,-officeShiftZ,roomFront,1.425,-entryBrandWall.x2+officeShiftZ/2,white,true);
- const ambient=new THREE.HemisphereLight('#e5eff5','#827b6b',.9);scene.add(ambient);
+ const ambient=new THREE.HemisphereLight('#e5eff5','#8e8575',.9);scene.add(ambient);
  const sun=new THREE.DirectionalLight('#fff1df',2.4);sun.position.set(-5,7,-19);sun.target.position.set(-3,0,-6);scene.add(sun.target);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-22;sun.shadow.camera.right=22;sun.shadow.camera.top=12;sun.shadow.camera.bottom=-12;sun.shadow.camera.near=.5;sun.shadow.camera.far=50;sun.shadow.normalBias=.018;sun.shadow.bias=-.0001;scene.add(sun);
- for(const x of [-8,6]){const fill=new THREE.PointLight('#f3f4e8',8,12,2);fill.position.set(x,2.55,-5);scene.add(fill);}
+ const fill=new THREE.PointLight('#f3f4e8',8,12,2);fill.position.set(6,2.55,-5);scene.add(fill);
  const officeKey=new THREE.SpotLight('#fff4df',22,14,Math.PI*.43,.8,2);officeKey.position.set(4,2.7,-3);officeKey.target.position.set(4,0,-5);officeKey.castShadow=true;officeKey.shadow.mapSize.set(1024,1024);officeKey.shadow.normalBias=.012;officeKey.shadow.bias=-.0001;scene.add(officeKey,officeKey.target);
  for(const [x,z,color,intensity] of [[-.8,1.30,'#fff0dc',7.5],[4,1.30,'#f5f5ee',7],[7.12,-.42,'#fff0db',12]]){
   const hallLight=new THREE.PointLight(color,intensity,4.8,2);hallLight.position.set(x,2.54,z);scene.add(hallLight);
@@ -471,7 +490,9 @@ export async function buildRouteWorld(scene){
  batchOpaqueMeshes(group);
  batchOpaqueMeshes(arrivalLift.fixed);
  const seats=chairRecords.map(record=>{record.group.updateWorldMatrix(true,false);const p=record.group.getWorldPosition(new THREE.Vector3());return {id:record.id,x:p.x,z:p.z,yaw:record.group.rotation.y,height:.50};});
- return {entryDoor,arrivalLift,setArrivalEnvironment:arrivalFinish.setEnvironment,seats,office:{solids,surfaces},spawn:{x:0,z:1.8,yaw:0},locationAt:(x,worldZ)=>{
+ const westWindowLighting=buildWestWindowLighting(scene,{west:officeWest,edge:partition.x,north:-13.6+officeShiftZ,south:officeShiftZ,
+  bays:westWindowBays.map(bay=>({...bay,z1:bay.z1+officeShiftZ,z2:bay.z2+officeShiftZ})),seats});
+ return {entryDoor,arrivalLift,westWindowLighting,setArrivalEnvironment:arrivalFinish.setEnvironment,seats,office:{solids,surfaces},spawn:{x:0,z:1.8,yaw:0},locationAt:(x,worldZ)=>{
   const z=worldZ-officeShiftZ,room=meetingRooms.find(r=>x>r.x1&&x<r.x2&&z>r.z1&&z<r.z2);
   return room?'Sala '+room.id+' · MEET POINT':z>=0&&z<kitchen.z2&&x>kitchen.x1&&x<kitchen.x2?'Cocina · WPP Production':worldZ>=0?'Hall de ascensores · Piso 14':worldZ>officeShiftZ&&x>4?'Acceso · WPP Production':x>partition.x?'Pasillo 1 · WPP Production':x>officeWest+4?'Pasillo 2 · WPP Production':'Fondo del pasillo 2';
  }};

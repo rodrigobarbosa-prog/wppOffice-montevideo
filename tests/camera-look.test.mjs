@@ -1,5 +1,16 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {createCameraLook} from '../src/camera-look.js';
+import {createCameraLook,followCameraAngles} from '../src/camera-look.js';
+
+test('follow view centers the presenter horizontally and vertically without taking the long turn',()=>{
+ const camera={x:0,y:1.68,z:0},presenter={x:.2,y:1.32,z:2};
+ let yaw=Math.PI-.06,pitch=0;
+ const first=followCameraAngles(camera,presenter,yaw,pitch,1/60);
+ assert.ok(first.yaw>yaw&&first.yaw-yaw<.03);
+ for(let i=0;i<150;i++)({yaw,pitch}=followCameraAngles(camera,presenter,yaw,pitch,1/60));
+ assert.ok(Math.abs(Math.atan2(Math.sin(yaw-Math.atan2(-.2,-2)),Math.cos(yaw-Math.atan2(-.2,-2))))<.001);
+ assert.ok(Math.abs(pitch-Math.atan2(-.36,Math.hypot(.2,2)))<.001);
+ assert.ok(followCameraAngles(camera,{...presenter,y:.84},yaw,pitch,.1).pitch<pitch);
+});
 
 test('drag rotation arrives smoothly without overshoot or a long inertial tail',()=>{
  const look=createCameraLook();look.input(100,20);let yaw=0,pitch=0;
