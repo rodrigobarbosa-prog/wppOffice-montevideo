@@ -4,9 +4,10 @@ import {createArrivalIntro,liftArrival,liftSeparates} from '../src/arrival-intro
 import {acceptsMovementKey} from '../src/movement-input.js';
 import {readFileSync} from 'node:fs';
 
-test('loading, boarding and ascent start on floor 10 and never go backwards',()=>{
+test('loading shows visit progress while the ride itself starts on floor 10',()=>{
  const html=readFileSync(new URL('../assets/visit.html',import.meta.url),'utf8');
- assert.match(html,/class="lift-preview-display">10<\/div>/);
+ assert.match(html,/<progress id="loading-bar"/);
+ assert.doesNotMatch(html,/lift-loading-preview|lift-preview-display/);
  const intro=createArrivalIntro();assert.equal(intro.update(0).floor,10);
  intro.start(5.3);let previous=10;const floors=new Set([10]);
  for(let i=0;i<120;i++){

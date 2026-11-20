@@ -37,15 +37,18 @@ import {createTourVoice,narrationPolicy} from './tour-voice.js';
 import {partition,serviceWall,kitchen,officeWest,meetingRooms,officeShiftZ,collaboratorStation} from './office-layout.js';
 
 const $=id=>document.getElementById(id),canvas=$('scene'),keys=new Set();
+const roleSwitch=$('role-switch'),roleSelect=$('view-role');
 let renderer,world,camera,yaw=0,pitch=0,dragging=false,high=!renderProfile.mobile;
 let lookPointer=null,lastLookX=0,lastLookY=0;
 const cameraLook=createCameraLook();
 const eyeHeight=1.68,radius=.24;
 const joystick=setupJoystick($('joystick'));
-const connectedVisit=new URL(location.href).searchParams.get('joined')==='1';
-const needsArrivalVoice=!new URL(location.href).searchParams.has('vista');
-const loadingInLift=needsArrivalVoice&&(!new URL(location.href).searchParams.get('modo')||new URL(location.href).searchParams.get('modo')==='client');
-if(loadingInLift){document.body.dataset.liftPreview='true';$('lift-loading-preview').hidden=false;$('welcome-title').textContent='Your visit starts here.';$('dialog-copy').textContent='Settle into the elevator while we prepare your visit. Your welcome plays during the ride; the doors open when it finishes.';}
+const params=new URL(location.href).searchParams;
+const connectedVisit=params.get('joined')==='1';
+const requestedRole=params.get('modo');
+const needsArrivalVoice=!params.has('vista');
+const clientArrival=needsArrivalVoice&&(!requestedRole||requestedRole==='client');
+if(clientArrival)document.body.dataset.clientArrival='true';
 let arrivalAudio=null,loadStage='office';
 const loading=createLoadingProgress(({percent,message})=>{$('loading-bar').value=percent;$('loading-percent').textContent=percent+'%';if(message){$('loading-stage').textContent=message;$('status').textContent=message;}});
 THREE.DefaultLoadingManager.onProgress=(url,loaded,total)=>{if(['office','people'].includes(loadStage))loading.set(loadStage,Math.min(.95,loaded/Math.max(1,total)),(loadStage==='office'?'Loading the office':'Loading people')+' · '+loaded+'/'+total+' resources');};
@@ -63,9 +66,9 @@ try{
  canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();renderer.setAnimationLoop(null);fail(new Error('Graphics context lost. Please reload the visit.'));});
  const scene=new THREE.Scene();scene.background=new THREE.Color('#c5dce6');scene.fog=new THREE.Fog('#c5dce6',350,1800);
  camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.08,2800);camera.rotation.order='YXZ';
+ if(clientArrival){camera.position.set(liftArrival.client.x,eyeHeight,liftArrival.client.z);camera.rotation.set(liftArrival.client.pitch,liftArrival.client.yaw,0);}
  loading.set('office',0,'Loading the office…');world=await buildRouteWorld(scene);loading.set('office',1,'Office ready');loadStage='lighting';loading.set('lighting',0,'Preparing lighting and reflections…');
  const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(renderer),env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.55;world.setArrivalEnvironment(env.texture);room.dispose();
- if(loadingInLift){camera.position.set(liftArrival.client.x,eyeHeight,liftArrival.client.z);camera.rotation.set(liftArrival.client.pitch,liftArrival.client.yaw,0);world.arrivalLift.set(0,10);renderer.render(scene,camera);$('lift-loading-preview').hidden=true;canvas.dataset.loadingPreview='live';}
  // Bake one reflection probe of this actual static office for metals, glass and varnish.
  if(renderProfile.reflectionProbe){const reflectionTarget=new THREE.WebGLCubeRenderTarget(128,{type:THREE.HalfFloatType});
  const reflectionCamera=new THREE.CubeCamera(.08,80,reflectionTarget);reflectionCamera.position.set(-6.6,1.7,-6);reflectionCamera.update(renderer,scene);
@@ -80,7 +83,7 @@ try{
  const avatars=createProgressiveAvatars({scene,factories:{presenter:createPresenterAvatar,client:createClientAvatar,collaborator:createCollaboratorAvatar},prepare:root=>prepareAvatar(renderer,root,scene,camera),onState:(person,state)=>{canvas.dataset[person+'Asset']=state;if(state==='ready')renderer.shadowMap.needsUpdate=true;}});
  const {presenter:presenterAvatar,client:clientAvatar,collaborator:collaboratorAvatar}=avatars.people;
  collaboratorAvatar.position.set(collaboratorStation.x,0,collaboratorStation.z);collaboratorAvatar.userData.seated=1;collaboratorAvatar.userData.face(collaboratorStation.yaw);
- await avatars.essentials(new URL(location.href).searchParams.get('modo')||'client');
+ await avatars.essentials(requestedRole||'client');
  loading.set('people',.98,'Preparing the scene for a smooth entrance…');
  await renderer.compileAsync(scene,camera);
  loading.set('people',1,'People ready');loadStage='welcome';loading.set('welcome',0,'Loading the English welcome…');
@@ -154,7 +157,6 @@ try{
  const arrivalIntro=createArrivalIntro();let arrivalDoor=0;
  function reset(){camera.position.set(initialView.x,eyeHeight,initialView.z);yaw=initialView.yaw;pitch=initialView.pitch||0;camera.rotation.set(pitch,yaw,0);keys.clear();}
  reset();
- const requestedRole=new URL(location.href).searchParams.get('modo');
  let role='client',clientPose={...initialView},collaboratorPose=null,hostMotion,hostPlaying=true,presenterAvailable=true,hasStarted=false;
  let cameraView='first',thirdPersonCamera=null,arrivalLookManual=false,arrivalGreetingSeen=false;
  let speechState={speaking:false},captionsVisible=false,voiceListKey='',pendingNarration='',narrationDwell=0;
@@ -214,8 +216,8 @@ try{
   for(const id of ['voice-toggle','narration-language','narration-voice','voice-volume','voice-replay']){const control=$(id);control.hidden=!policy.audio||['narration-language','narration-voice'].includes(id);const label=document.querySelector('label[for="'+id+'"]');if(label)label.hidden=control.hidden;}
   $('captions-toggle').hidden=!policy.captions;updateCaptions();
   $('view-label').textContent={client:'Client view',presenter:'Presenter view',collaborator:'Collaborator view'}[role];
-  $('role-switch').innerHTML='<small>DEV</small> Switch to '+(role==='client'?'Presenter':'Client');
-  $('view-role').value=role;
+  if(roleSwitch)roleSwitch.innerHTML='<small>DEV</small> Switch to '+(role==='client'?'Presenter':'Client');
+  if(roleSelect)roleSelect.value=role;
   const visible=avatarVisibility(role,presenterAvailable);
   clientAvatar.visible=visible.client;presenterAvatar.visible=visible.presenter;
   collaboratorAvatar.visible=role!=='collaborator';
@@ -231,14 +233,14 @@ try{
   const current={x:camera.position.x,z:camera.position.z,yaw,pitch};
   let destination;
   if(next==='collaborator')destination={x:collaboratorAvatar.position.x,z:collaboratorAvatar.position.z,yaw:collaboratorAvatar.rotation.y-Math.PI,pitch:-.10};
-  if(next==='collaborator'&&!destination){$('view-role').value=role;return;}
+  if(next==='collaborator'&&!destination){if(roleSelect)roleSelect.value=role;return;}
   if(role==='client'){clientPose=current;clientAvatar.position.set(current.x,0,current.z);clientAvatar.userData.face(yaw+Math.PI);}
   if(role==='presenter'){presenterAvatar.position.set(current.x,0,current.z);presenterAvatar.userData.face(yaw+Math.PI);}
   if(role==='collaborator')collaboratorPose=current;
   if(next==='client')destination=clientPose;
   if(next==='presenter'){
    const p=presenterAvailable?presenterAvatar.position:findCompanionPlacement(clientPose,blocked)?.host;
-   if(!p){$('view-role').value=role;return;}
+   if(!p){if(roleSelect)roleSelect.value=role;return;}
    destination={x:p.x,z:p.z,yaw:Math.atan2(p.x-clientPose.x,p.z-clientPose.z),pitch:-.04};presenterAvailable=true;
   }
   role=next;camera.position.set(destination.x,seatMotions[role].active?1.20:eyeHeight,destination.z);yaw=destination.yaw;pitch=destination.pitch||0;
@@ -272,8 +274,8 @@ try{
  if(needsArrivalVoice)narrator.reserveArrivalForVoiceover();
  const enter=$('enter');let dialogMode='intro';
  if(connectedVisit)$('host-demo').hidden=true;
- enter.disabled=visitControls.rejected();enter.textContent=enter.disabled?'Esperando admisión…':'Start visit';
- $('status').textContent='Local visit · Microphones start off';
+ enter.disabled=visitControls.rejected();enter.textContent=enter.disabled?'Waiting for admission…':'Start visit';
+ $('status').textContent=enter.disabled?'Waiting for the presenter to admit you…':'Microphones are off when you join.';
  enter.focus();
  function showDialog(mode){
   narrator.setPaused(true);
@@ -284,7 +286,7 @@ try{
   $('guide-toggle').hidden=mode!=='pause';
   if(mode==='guide'){
    $('dialog-step').textContent=role.toUpperCase()+' VIEW';$('welcome-title').textContent='Make yourself comfortable.';
-   $('dialog-copy').textContent=role==='client'?'You follow the presenter automatically. Choose Explore office to walk freely, or Follow presenter to rejoin.':'Drag to look. Use People & communication for your microphone, attention requests and Brian’s screen. Brian works seated at a workstation in Pasillo 1 / Office East Wing.';
+   $('dialog-copy').textContent=role==='client'?'You follow the presenter automatically. Choose Explore office to walk freely, or Follow presenter to rejoin.':'Drag to look. Use People & communication for your microphone, attention requests and Brian’s screen. Brian works at a desk in the west wing.';
    enter.textContent='Back to visit';
   }else if(mode==='pause'){
    $('dialog-step').textContent='TAKE YOUR TIME';$('welcome-title').textContent='Visit paused.';
@@ -300,7 +302,7 @@ try{
  function pause(){if(hasStarted&&$('welcome').hidden)showDialog('pause');}
  enter.onclick=()=>{
   if(visitControls.rejected())return;
-  if(loadingInLift&&!hasStarted){$('welcome').classList.add('departing');setTimeout(()=>$('welcome').classList.remove('departing'),700);}
+  if(clientArrival&&role==='client'&&!hasStarted){$('welcome').classList.add('departing');setTimeout(()=>$('welcome').classList.remove('departing'),700);}
   hasStarted=true;$('welcome').hidden=true;$('tour-ui').hidden=false;$('crosshair').hidden=false;
   canvas.style.cursor='grab';canvas.focus();
   visitControls.unlock();
@@ -311,11 +313,11 @@ try{
  function useDoor(){if(socialControls.confirm())return;if(seatInteractions.use())return;if(role==='client'&&!previewOffice&&arrivalDoor<.999)return;if(connectedVisit&&role!=='presenter')return;if($('welcome').hidden&&aimedDoor)world.entryDoor.toggle();}
  $('door-action').onclick=()=>{useDoor();canvas.focus();};
  $('host-demo').onclick=()=>{hostPlaying=!hostPlaying;$('host-demo').textContent=hostPlaying?'Pause host':'Resume host';narrator.setPaused(!hostPlaying);if(arrivalAudio&&arrivalIntro.active){if(!hostPlaying)arrivalAudio.pause();else if(hasStarted&&!arrivalAudio.state().finished)void arrivalAudio.play();}canvas.focus();};
- $('role-switch').onclick=()=>{
+ if(roleSwitch)roleSwitch.onclick=()=>{
   keys.clear();stopLooking();$('settings').open=false;
   switchRole(role==='client'?'presenter':'client');
  };
- $('view-role').onchange=e=>{switchRole(e.target.value);};
+ if(roleSelect)roleSelect.onchange=e=>{switchRole(e.target.value);};
  $('welcome').addEventListener('keydown',e=>{if(e.key!=='Tab')return;const focusable=[...$('welcome').querySelectorAll('button:not(:disabled)')].filter(b=>!b.hidden);const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}});
  document.addEventListener('keydown',e=>{if(e.code==='Escape'){if(visitControls.screenPhase()!=='idle'||!$('screen-panel').hidden){$('screen-close').click();return;}if($('settings').open){$('settings').open=false;return;}pause();}});
  document.addEventListener('keydown',e=>{if(e.code==='KeyE'&&!e.repeat&&acceptsMovementKey(e)){e.preventDefault();useDoor();}});
@@ -369,7 +371,7 @@ try{
   $('arrival-audio-retry').hidden=!introRunning||!arrivalAudio?.state().error;
   if(arrivalAudio){const audio=arrivalAudio.state();canvas.dataset.welcomeAudio=audio.finished?'finished':audio.playing?'playing':audio.error?'error':'ready';canvas.dataset.welcomeTime=audio.currentTime.toFixed(2);canvas.dataset.welcomeDuration=audio.duration.toFixed(2);}
   canvas.dataset.arrivalPhase=arrivalIntro.phase;canvas.dataset.liftDoor=arrivalDoor.toFixed(3);
-  visitControls.waitForClient(presenterWaiting,connectedVisit&&(!remoteClient||remoteClient.arriving)?'Esperando al cliente en el ascensor.':remoteClient?.seat?.id?'Waiting while the client is seated.':'Waiting while the client visits Brian’s desk.');canvas.dataset.screenVisit=workstationVisit.phase;canvas.dataset.presenterWaiting=String(presenterWaiting);
+  visitControls.waitForClient(presenterWaiting,connectedVisit&&(!remoteClient||remoteClient.arriving)?'Waiting for the client in the elevator.':remoteClient?.seat?.id?'Waiting while the client is seated.':'Waiting while the client visits Brian’s desk.');canvas.dataset.screenVisit=workstationVisit.phase;canvas.dataset.presenterWaiting=String(presenterWaiting);
   $('reset').disabled=presenterMovementLocked;if(presenterMovementLocked)keys.clear();
   if(connectedVisit){presenterAvatar.visible=role!=='presenter'&&Boolean(remotePresenter);clientAvatar.visible=role!=='client'&&Boolean(remoteClient);collaboratorAvatar.visible=role!=='collaborator'&&visitControls.hasPeer('collaborator');}
   if(role!=='presenter'&&remotePresenter){presenterAvatar.position.set(remotePresenter.x,0,remotePresenter.z);presenterAvatar.userData.face(remotePresenter.heading||0);}

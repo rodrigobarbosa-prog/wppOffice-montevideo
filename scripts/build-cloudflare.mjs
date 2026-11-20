@@ -7,6 +7,7 @@ for(const file of ['index.html','style.css'])await copyFile(file,path.join(targe
 for(const directory of ['src','vendor','assets/audio','assets/avatars'])await cp(directory,path.join(target,directory),{recursive:true});
 await copyFile('assets/lobby.css',path.join(target,'assets/lobby.css'));
 await copyFile('assets/client-entry.html',path.join(target,'assets/client-entry.html'));
+await copyFile('assets/wpp-dotted-mark.png',path.join(target,'assets/wpp-dotted-mark.png'));
 // Only these two source images are used by existing runtime textures.
 await mkdir(path.join(target,'assets/references'),{recursive:true});
 for(const file of ['02.jpg','13-mampara-frontal.jpg'])await copyFile('assets/references/'+file,path.join(target,'assets/references',file));
