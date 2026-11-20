@@ -241,25 +241,23 @@ export async function buildRouteWorld(scene){
   if(!panelSpans.some(span=>z-.009>=span.z1&&z+.009<=span.z2))continue;
   for(const side of [-1,1])box(.018,glassHeight,.018,partition.x+side*.026,glassY,z,mat('#8db8b9',{metalness:.5,roughness:.32}));
  }
- const logoSource=await new THREE.TextureLoader().loadAsync('/assets/references/13-mampara-frontal.jpg');
+ const logoSource=await new THREE.TextureLoader().loadAsync('/assets/wpp-dotted-mark.png');
  const logo=map((c,w,h)=>{
-  const img=logoSource.image;
-  const reference=document.createElement('canvas');reference.width=w;reference.height=1;
-  const referenceContext=reference.getContext('2d');referenceContext.drawImage(img,img.width*.242,img.height*.383,img.width*.59,1,0,0,w,1);
-  const background=referenceContext.getImageData(0,0,w,1).data;
-  c.drawImage(img,img.width*.242,img.height*.397,img.width*.59,img.height*.121,0,0,w,h);
-  const pixels=c.getImageData(0,0,w,h);
-  for(let i=0;i<pixels.data.length;i+=4){
-   const r=pixels.data[i],g=pixels.data[i+1],b=pixels.data[i+2];
-   pixels.data[i]=27;pixels.data[i+1]=58;pixels.data[i+2]=76;
-   const column=(i/4)%w,offset=column*4;
-   const contrast=Math.min(background[offset]-r,background[offset+1]-g,background[offset+2]-b);
-   const row=Math.floor(i/4/w);
-   pixels.data[i+3]=row>h*.06&&row<h*.79&&b>g+10&&g>r+8?Math.max(0,Math.min(255,(contrast-22)*12)):0;
-  }
-  c.putImageData(pixels,0,0);
- },2048,384);logoSource.dispose();
- const logoMat=new THREE.MeshBasicMaterial({map:logo,transparent:true,alphaTest:.12,side:THREE.FrontSide,depthWrite:false});
+  const mark=logoSource.image,color='#1b3a4c',height=h*.64;
+  const markWidth=height*mark.width/mark.height,wordWidth=w*.62,gap=w*.035;
+  const x=(w-markWidth-gap-wordWidth)/2,y=(h-height)/2;
+  c.drawImage(mark,x,y,markWidth,height);
+  c.globalCompositeOperation='source-in';c.fillStyle=color;c.fillRect(0,0,w,h);
+  c.globalCompositeOperation='source-over';
+  c.font='700 300px "Century Gothic", Arial, sans-serif';
+  const word='Production';
+  const {actualBoundingBoxAscent:ascent,actualBoundingBoxDescent:descent,actualBoundingBoxLeft:left,actualBoundingBoxRight:right}=c.measureText(word);
+  c.translate(x+markWidth+gap,y);
+  c.scale(wordWidth/(left+right),height/(ascent+descent));
+  c.fillText(word,left,ascent);
+ },2560,320);logoSource.dispose();
+ logo.anisotropy=8;
+ const logoMat=new THREE.MeshBasicMaterial({map:logo,transparent:true,alphaTest:.035,side:THREE.FrontSide,depthWrite:false});
  for(const side of [-1,1]){
   const logoMesh=new THREE.Mesh(new THREE.PlaneGeometry(6.8,.83),logoMat);logoMesh.position.set(partition.x+side*.057,1.76,partitionZ);logoMesh.rotation.y=side*Math.PI/2;group.add(logoMesh);
  }
@@ -479,7 +477,7 @@ export async function buildRouteWorld(scene){
  // Close the short recessed connection to the translated room frontage.
  const roomFront=entryBrandWall.origin.x+entryBrandWall.returnDepth;
  box(.14,2.85,-officeShiftZ,roomFront,1.425,-entryBrandWall.x2+officeShiftZ/2,white,true);
- const ambient=new THREE.HemisphereLight('#e5eff5','#8e8575',.9);scene.add(ambient);
+ const ambient=new THREE.HemisphereLight('#e5eff5','#8e8575',.94);scene.add(ambient);
  const sun=new THREE.DirectionalLight('#fff1df',2.4);sun.position.set(-5,7,-19);sun.target.position.set(-3,0,-6);scene.add(sun.target);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.left=-22;sun.shadow.camera.right=22;sun.shadow.camera.top=12;sun.shadow.camera.bottom=-12;sun.shadow.camera.near=.5;sun.shadow.camera.far=50;sun.shadow.normalBias=.018;sun.shadow.bias=-.0001;scene.add(sun);
  const fill=new THREE.PointLight('#f3f4e8',8,12,2);fill.position.set(6,2.55,-5);scene.add(fill);
  const officeKey=new THREE.SpotLight('#fff4df',22,14,Math.PI*.43,.8,2);officeKey.position.set(4,2.7,-3);officeKey.target.position.set(4,0,-5);officeKey.castShadow=true;officeKey.shadow.mapSize.set(1024,1024);officeKey.shadow.normalBias=.012;officeKey.shadow.bias=-.0001;scene.add(officeKey,officeKey.target);

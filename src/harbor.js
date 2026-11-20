@@ -113,7 +113,19 @@ export function buildHarbor({scene,group,box,cylinder,mat,map}){
   box(14,1.2,18,x,-42.4+h,z,roof);
  }
  // A subtle horizon gradient gives the exterior daylight without a heavyweight sky system.
- const skyMap=map((c,w,h)=>{const g=c.createLinearGradient(0,0,0,h);g.addColorStop(0,'#76add5');g.addColorStop(.48,'#bed9e7');g.addColorStop(.6,'#e0e8e5');g.addColorStop(1,'#b9cbce');c.fillStyle=g;c.fillRect(0,0,w,h);},1024,512);
+ const skyMap=map((c,w,h)=>{
+  const gradient=c.createLinearGradient(0,0,0,h);
+  for(const [stop,color] of [[0,'#76add5'],[.48,'#bed9e7'],[.6,'#e0e8e5'],[1,'#b9cbce']])gradient.addColorStop(stop,color);
+  c.fillStyle=gradient;c.fillRect(0,0,w,h);
+  // Low sun over the port, visible below the blinds near the north windows.
+  const x=w*.775,y=h*(.5-8/180),radius=14;
+  const halo=c.createRadialGradient(x,y,1.3,x,y,radius);
+  halo.addColorStop(0,'rgba(255,247,206,.75)');
+  halo.addColorStop(.32,'rgba(255,244,202,.25)');
+  halo.addColorStop(1,'rgba(255,244,202,0)');
+  c.fillStyle=halo;c.fillRect(x-radius,y-radius,radius*2,radius*2);
+  c.fillStyle='#fffbed';c.beginPath();c.arc(x,y,1.65,0,Math.PI*2);c.fill();
+ },1024,512);
  const sky=new THREE.Mesh(new THREE.SphereGeometry(1900,24,12),new THREE.MeshBasicMaterial({map:skyMap,side:THREE.BackSide,fog:false,depthWrite:false}));
  sky.renderOrder=-10;scene.add(sky);
 }
