@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fromGame,passageDesks,officeDesks,partition,exteriorDesk,aisleEndDesk,deskEndLimit,chairYawForSide,serviceWall,kitchen,perimeterDesk,kitchenWindowDesk,kitchenWindowBay,officeWest,cornerColumn} from '../src/office-layout.js';
+import {fromGame,passageDesks,officeDesks,partition,exteriorDesk,aisleEndDesk,deskEndLimit,chairYawForSide,serviceWall,kitchen,perimeterDesk,kitchenWindowDesk,kitchenWindowBay,officeWest,cornerColumn,collaboratorDesk,collaboratorStation,collaboratorSeatIndex,collaboratorSide,officeShiftZ} from '../src/office-layout.js';
 
+test('Brian occupies the marked third chair on the west side of the workstation row',()=>{
+ assert.equal(collaboratorDesk,officeDesks[2]);
+ assert.equal(collaboratorSeatIndex,2);
+ assert.equal(collaboratorSide,-1);
+ assert.ok(collaboratorStation.x<collaboratorDesk.x);
+ assert.ok(Math.abs(collaboratorStation.z-officeShiftZ-collaboratorDesk.z)<=collaboratorDesk.length/collaboratorDesk.seats/2+.001);
+ assert.equal(collaboratorStation.yaw,Math.PI/2);
+});
 test('one workstation fills the kitchen-side window up to the J&J wall',()=>{
  assert.equal(kitchenWindowDesk.seats,1);
  assert.ok(Math.abs(kitchenWindowDesk.z-kitchenWindowDesk.length/2-kitchenWindowBay.z1)<1e-9);

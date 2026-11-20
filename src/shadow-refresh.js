@@ -5,7 +5,7 @@ export function createShadowRefresh(interval=1000/30){
  let last=-Infinity,signature='',pending=false;
  return {update(now,actors){
   const next=actors.map(a=>[a.visible,a.position.x.toFixed(3),a.position.y.toFixed(3),a.position.z.toFixed(3),(a.rotation?.y||0).toFixed(3),(a.userData.seated||0).toFixed(3),a.userData.animation?.gesture||'idle'].join(':')).join('|');
-  const animated=actors.some(a=>a.visible&&((a.userData.animation?.speed||0)>.025||['welcome','explain','attention','thumbsUp','point','no'].includes(a.userData.animation?.gesture)));
+  const animated=actors.some(a=>a.visible&&((a.userData.animation?.speed||0)>.025||['welcome','explain','attention','thumbsUp','turn','point','no'].includes(a.userData.animation?.gesture)));
   pending=pending||next!==signature||animated;signature=next;
   if(pending&&now-last>=interval){last=now;pending=false;return true;}return false;
  }};

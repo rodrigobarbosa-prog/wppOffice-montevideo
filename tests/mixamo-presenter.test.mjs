@@ -45,6 +45,33 @@ test('all three rigs show thumbs up, point to a world position and shake no, the
  }
 });
 
+test('a point to the side turns the body before the arm moves and keeps seated feet in place',async()=>{
+ const root=buildMixamoPresenter(new THREE.Scene(),await load());
+ const joint=name=>{let found;root.traverse(b=>{if(b.isBone&&b.name.replace(/^mixamorig\d*/,'')===name)found=b;});return found;};
+ const rightArm=joint('RightArm'),forearm=joint('RightForeArm'),hand=joint('RightHand'),spine=joint('Spine'),foot=joint('LeftFoot');
+ const point={x:4,y:1.4,z:0},p=new THREE.Vector3(point.x,point.y,point.z);
+ for(const seated of [0,1]){
+  root.userData.socialGesture=null;root.userData.face(0);root.userData.animate(0,{seated,now:0});
+  const armAtRest=rightArm.quaternion.clone(),spineAtRest=spine.quaternion.clone();
+  const planted=foot.getWorldPosition(new THREE.Vector3());
+  root.userData.socialGesture={kind:'point',point,started:0,heading:0};
+  root.userData.animate(0,{seated,now:290});
+  assert.equal(root.userData.animation.gesture,'turn');
+  assert.ok(rightArm.quaternion.angleTo(armAtRest)<.001);
+  if(seated){
+   assert.equal(root.rotation.y,0);
+   assert.ok(spine.quaternion.angleTo(spineAtRest)>.4);
+   assert.ok(foot.getWorldPosition(new THREE.Vector3()).distanceTo(planted)<.001);
+  }else assert.ok(Math.abs(root.rotation.y-Math.PI/4)<.001);
+  root.userData.animate(0,{seated,now:1050});
+  assert.equal(root.userData.animation.gesture,'point');
+  const elbow=forearm.getWorldPosition(new THREE.Vector3());
+  assert.ok(hand.getWorldPosition(new THREE.Vector3()).sub(elbow).normalize().dot(p.clone().sub(elbow).normalize())>.95);
+  root.userData.animate(0,{seated,now:3200});
+  assert.equal(root.rotation.y,0);
+ }
+});
+
 test('all three real rigs raise and wave a hand above the head, including when seated',async()=>{
  for(const path of ['../assets/avatars/mixamo/presenter.glb','../assets/avatars/client/client.glb','../assets/avatars/collaborator/collaborator.glb']){
   const root=buildMixamoPresenter(new THREE.Scene(),await load(path));let hand,head;
@@ -120,13 +147,14 @@ test('Passive Marker Man has an independent animated body and natural resting ar
  const bounds=new THREE.Box3().setFromObject(client);assert.ok(bounds.max.y>1.7&&bounds.max.y<1.9);
 });
 
-test('Brian stays seated at the Pasillo 1 workstation with bent knees and finite skin transforms',async()=>{
+test('Brian stays seated with grounded feet when his model loads after the attention indicator',async()=>{
  const gltf=await load('../assets/avatars/collaborator/collaborator.glb');
- const brian=buildCollaboratorAvatar(new THREE.Scene(),gltf);let hip,leftKnee,leftFoot;
+ const root=new THREE.Group();root.add(new THREE.Group());root.userData.seated=1;
+ const brian=buildCollaboratorAvatar(new THREE.Scene(),gltf,{root});let hip,leftKnee,leftFoot;
  brian.traverse(o=>{if(/^mixamorig\d*Hips$/.test(o.name))hip=o;if(/^mixamorig\d*LeftLeg$/.test(o.name))leftKnee=o;if(/^mixamorig\d*LeftFoot$/.test(o.name))leftFoot=o;});
  for(let i=0;i<120;i++){brian.userData.animate(1/30);brian.updateMatrixWorld(true);brian.traverse(o=>assert.ok(o.matrixWorld.elements.every(Number.isFinite)));}
  const h=hip.getWorldPosition(new THREE.Vector3()),k=leftKnee.getWorldPosition(new THREE.Vector3()),f=leftFoot.getWorldPosition(new THREE.Vector3());
- assert.ok(Math.abs(h.y-.55)<.02);assert.ok(Math.abs(h.y-k.y)<.12);assert.ok(k.y-f.y>.3);assert.ok(f.y>-.05&&f.y<.22);
+ assert.ok(Math.abs(h.y-.55)<.02);assert.ok(Math.abs(h.y-k.y)<.12);assert.ok(k.y-f.y>.3);assert.ok(f.y>0&&f.y<.1);
  assert.equal(brian.userData.animation.gesture,'seated');assert.equal(brian.userData.presentation.source,'Adobe Mixamo / Brian');
 });
 

@@ -10,8 +10,20 @@ export function selectTourVoice(all,language,voiceURI=''){
 export function narrationFor(location,language='es'){
  const zone=location.startsWith('Sala ')?'meeting':location.startsWith('Cocina')?'kitchen':location.startsWith('Hall')?'arrival':location.startsWith('Acceso')?'entrance':'office';
  const scripts={
-  es:{arrival:'Bienvenido a WPP Production, en Montevideo. Estamos llegando al piso catorce. Al abrirse las puertas, tu presentador te estará esperando para acompañarte por la oficina.',entrance:'Estamos en la entrada de la oficina. En una visita compartida, el presentador abre la puerta y el cliente lo acompaña. Vamos a entrar.',office:'Este es nuestro espacio de trabajo. Los puestos enfrentados y las salas de reunión conectan las distintas áreas del equipo. Seguime, y vamos conociendo los distintos espacios.',meeting:'Estas son nuestras salas de reunión. Los frentes de vidrio permiten mantener la conexión visual con la oficina, con mesas y equipamiento para trabajar en equipo.',kitchen:'Llegamos a la cocina y al espacio de encuentro del equipo. Podés detenerte y mirar los detalles antes de continuar.'},
-  en:{arrival:'Welcome to WPP Production in Montevideo. We are arriving on floor fourteen. When the doors open, your presenter will be waiting to guide you through the office.',entrance:'This is the office entrance. The door starts closed. Move closer, look at it, and press E, or use the button on screen, to open or close it.',office:'This is our workspace. Facing workstations and meeting rooms connect the different areas of the team. I will stay beside you as you explore.',meeting:'These are our meeting rooms. Glass fronts keep a visual connection with the office, with tables and equipment for teamwork.',kitchen:'This is the kitchen and the team gathering space. Take a moment to look around before continuing.'}
+  es:{
+   arrival:'Ya estamos en el piso catorce de WPP Production, en Montevideo. Empecemos el recorrido.',
+   entrance:'Por acá empieza la visita. Vení, te muestro dónde trabaja el equipo.',
+   office:'Acá las ideas toman forma. Compartimos las mesas y estamos a mano para ayudarnos.',
+   meeting:'En estas salas compartimos ideas, revisamos proyectos y tomamos decisiones en equipo.',
+   kitchen:'Esta es la cocina. El equipo suele encontrarse acá para un café y una charla.'
+  },
+  en:{
+   arrival:'We’re on the fourteenth floor at WPP Production in Montevideo. Let’s take a look around.',
+   entrance:'Our tour starts here. Come on in and see where the team works.',
+   office:'This is where ideas take shape. We work side by side, so it’s easy to share ideas and lend a hand.',
+   meeting:'These are our meeting rooms, where we share ideas and review work together.',
+   kitchen:'Here’s the kitchen. It’s where the team catches up over coffee.'
+  }
  };
  return {zone,text:(scripts[language]||scripts.es)[zone]};
 }

@@ -3,6 +3,8 @@ import {renderProfile} from './render-profile.js';
 import {createCameraLook} from './camera-look.js';
 import {avatarStepBlocked} from './avatar-collision.js';
 import {setupSocialControls} from './social-controls.js';
+import {isPointing} from './social-gesture.js';
+import {segmentOccluded,createWalkOcclusion} from './visibility-segment.js';
 import {visitAudioOutput,VisitAudio} from './visit-audio-output.js';
 import {createBackgroundMusic} from './background-music.js';
 import {configureAvatarAssets} from './avatar-assets.js';
@@ -28,7 +30,7 @@ import {createCollaboratorAvatar} from './collaborator-avatar.js';
 import {createWorkstationVisit} from './workstation-visit.js';
 import {createClientFollower} from './client-follow.js';
 import {setupVisitControls} from './visit-controls.js';
-import {visitRoles,avatarVisibility,findCollaboratorView} from './visit-views.js';
+import {visitRoles,avatarVisibility,findCollaboratorView,headingToward,conversationHeadings} from './visit-views.js';
 import {createHostMotion} from './host-motion.js';
 import {findCompanionPlacement} from './companion-placement.js';
 import {createTourVoice,narrationPolicy} from './tour-voice.js';
@@ -103,8 +105,10 @@ try{
  }
  const seatMotions=Object.fromEntries(visitRoles.map(person=>[person,createSeatMotion({blocked,transitionBlocked:(x,z,id)=>blocked(x,z,id,.9),occupied:id=>Object.entries(people).some(([other,avatar])=>other!==person&&avatar.userData.seatId===id)})]));
  const followSeating=createFollowSeating({seats:world.seats,motion:seatMotions.client,blocked,transitionBlocked:(x,z,id)=>blocked(x,z,id,.9),occupied:id=>Object.entries(people).some(([person,avatar])=>person!=='client'&&avatar.userData.seatId===id)});
- const brianSeat=world.seats.reduce((best,seat)=>!best||Math.hypot(seat.x-collaboratorAvatar.position.x,seat.z-collaboratorAvatar.position.z)<Math.hypot(best.x-collaboratorAvatar.position.x,best.z-collaboratorAvatar.position.z)?seat:best,null);
+ const brianSeat=world.seats.find(seat=>Math.hypot(seat.x-collaboratorStation.x,seat.z-collaboratorStation.z)<.001);
  if(brianSeat){seatMotions.collaborator.occupy(brianSeat);collaboratorAvatar.userData.seatId=brianSeat.id;}
+ const brianView=collaboratorStation.approachPoints.at(-1);
+ const brianReview={x:brianView.x,z:brianView.z-officeShiftZ,yaw:headingToward(collaboratorStation,brianView),pitch:-.21};
  const reviewViews={
   pasillo2:{x:-3.65,z:-1.8,yaw:.6,pitch:-.08},
   mampara:{x:3.15,z:-7.6,yaw:Math.PI/2,pitch:.06},
@@ -120,13 +124,13 @@ try{
   accesoCocina:{x:kitchen.x2-.6,z:-.8,yaw:Math.PI,pitch:0},
   fondo2:{x:officeWest+2.2,z:-6.8,yaw:Math.PI/2,pitch:-.04},
   puestoVentana:{x:officeWest+2.3,z:-3.2,yaw:2.2,pitch:-.10},
-  sillaBrian:{x:collaboratorStation.x+1,z:collaboratorStation.z-officeShiftZ+1,yaw:.8,pitch:-.1},
+  sillaBrian:{...brianReview},
   sala01:{x:6.25,z:-6.7,yaw:-1.96,pitch:-.07},
   pantallaSala01:{x:10.6,z:-6.5,yaw:-.78,pitch:.04},
   presentador:{x:7.5,z:-.5,yaw:1.55,pitch:-.04},
   cabina:{x:-.36,z:4.37,yaw:-.26,pitch:.12},
   recepcion:{x:6.02,z:-1.36,yaw:-1.35,pitch:-.12},
-  colaborador:{x:collaboratorStation.x+1.7,z:collaboratorStation.z+1.6-officeShiftZ,yaw:.9,pitch:-.18},
+  colaborador:{...brianReview},
   salasAlineadas:{x:6.9,z:-7.9,yaw:-Math.PI/2,pitch:-.025},
   puestosRetirados:{x:8.1,z:-6.4,yaw:0,pitch:-.06},
   puestoAgregado:{x:8.1,z:-1.65,yaw:1.02,pitch:-.13},
@@ -194,9 +198,9 @@ try{
   presenterAvailable=Boolean(placement);presenterAvatar.visible=presenterAvailable;hostMotion=null;
   if(!placement){yaw=clientPose.yaw;pitch=clientPose.pitch||0;camera.rotation.set(pitch,yaw,0);canvas.dataset.companion='no-space';return;}
   presenterAvatar.position.set(placement.host.x,0,placement.host.z);
-  presenterAvatar.userData.face(Math.atan2(camera.position.x-placement.host.x,camera.position.z-placement.host.z));
+  presenterAvatar.userData.face(headingToward(presenterAvatar.position,clientAvatar.position));
   yaw=placement.yaw;pitch=placement.pitch;camera.rotation.set(pitch,yaw,0);
-  clientPose.yaw=yaw;clientPose.pitch=pitch;clientAvatar.userData.face(yaw+Math.PI);
+  clientPose.yaw=yaw;clientPose.pitch=pitch;clientAvatar.userData.face(headingToward(clientAvatar.position,presenterAvatar.position));
   follower.reset();
   hostMotion=createHostMotion(placement.host,camera.position,blocked);
   canvas.dataset.companion='beside';
@@ -245,16 +249,16 @@ try{
   if(role==='client'&&!previewOffice&&hasStarted&&arrivalIntro.active){arrivalIntro.start(arrivalAudio.state().duration);if(!arrivalAudio.state().finished)void arrivalAudio.play();}
  }
  clientView();
- if(!previewOffice){presenterAvatar.position.set(liftArrival.host.x,0,liftArrival.host.z);presenterAvatar.userData.face(0);presenterAvailable=true;hostMotion=null;yaw=liftArrival.client.yaw;pitch=liftArrival.client.pitch;camera.rotation.set(pitch,yaw,0);}
+ if(!previewOffice){presenterAvatar.position.set(liftArrival.host.x,0,liftArrival.host.z);presenterAvatar.userData.face(headingToward(presenterAvatar.position,clientAvatar.position));presenterAvailable=true;hostMotion=null;yaw=liftArrival.client.yaw;pitch=liftArrival.client.pitch;camera.rotation.set(pitch,yaw,0);}
  if(visitRoles.includes(requestedRole)&&requestedRole!=='client')switchRole(requestedRole);
- if(role==='presenter'&&!previewOffice){camera.position.set(liftArrival.host.x,eyeHeight,liftArrival.host.z);presenterAvatar.position.set(liftArrival.host.x,0,liftArrival.host.z);yaw=Math.PI;camera.rotation.set(0,yaw,0);}
+ if(role==='presenter'&&!previewOffice){camera.position.set(liftArrival.host.x,eyeHeight,liftArrival.host.z);presenterAvatar.position.set(liftArrival.host.x,0,liftArrival.host.z);yaw=headingToward(presenterAvatar.position,clientAvatar.position)-Math.PI;camera.rotation.set(0,yaw,0);}
  if(reviewView==='presentador'&&role==='client'&&presenterAvatar.visible){
   camera.fov=30;camera.position.y=1.55;camera.updateProjectionMatrix();
   yaw=Math.atan2(camera.position.x-presenterAvatar.position.x,camera.position.z-presenterAvatar.position.z);pitch=-.035;camera.rotation.set(pitch,yaw,0);
  }
  updateRole();
  let socialControls;
- const workstationVisit=createWorkstationVisit({station:collaboratorStation,blocked:(x,z)=>blocked(x,z)||[presenterAvatar,collaboratorAvatar].some(a=>a.visible&&Math.hypot(x-a.position.x,z-a.position.z)<.70)});
+ const workstationVisit=createWorkstationVisit({station:collaboratorStation,occluded:createWalkOcclusion(world.office.solids,radius,eyeHeight),blocked:(x,z)=>blocked(x,z)||[presenterAvatar,collaboratorAvatar].some(a=>a.visible&&Math.hypot(x-a.position.x,z-a.position.z)<.70)});
  visitControls=setupVisitControls({scene,onScreenVisit:begin=>{if(begin&&!workstationVisit.start(clientAvatar.position))return false;if(!begin)workstationVisit.cancel();narrator.setPaused(begin||!hasStarted||!hostPlaying);following=!begin;follower.reset();updateRole();return true;},onExplore:explore=>{following=!explore;follower.reset();updateRole();},onAttention:(target,from)=>{
   const item=attentionRings.find(a=>a.avatar===people[target]);if(item)item.until=performance.now()+6000;
   const actor=people[from];if(actor){actor.userData.actionUntil=performance.now()+3200;actor.userData.actionTarget=target;const signal=attentionRings.find(a=>a.avatar===actor);if(signal)signal.until=performance.now()+3200;}
@@ -357,7 +361,7 @@ try{
   if(active&&introRunning&&hostPlaying){
    const audio=arrivalAudio.state(),step=arrivalIntro.update(elapsed,{audioFinished:audio.finished,audioTime:audio.currentTime});arrivalDoor=step.door;world.arrivalLift.set(step.door,step.floor,step);
    const exit=step.exit||0,z=liftArrival.client.z+(liftArrival.exit.z-liftArrival.client.z)*exit,previousZ=clientAvatar.position.z;
-   clientAvatar.position.set(0,0,z);clientAvatar.userData.face(Math.PI);camera.position.set(0,eyeHeight,z);if(!arrivalLookManual){const towardHost=Math.atan2(-presenterAvatar.position.x,z-presenterAvatar.position.z);yaw=(step.cameraYaw||0)*(1-exit)+towardHost*exit;pitch=step.cameraPitch||0;camera.rotation.set(pitch,yaw,0);}clientSpeed=Math.abs(z-previousZ)/Math.max(dt,.001);
+   clientAvatar.position.set(0,0,z);clientAvatar.userData.face(exit>0?headingToward(clientAvatar.position,presenterAvatar.position):Math.PI);camera.position.set(0,eyeHeight,z);if(!arrivalLookManual){const towardHost=Math.atan2(-presenterAvatar.position.x,z-presenterAvatar.position.z);yaw=(step.cameraYaw||0)*(1-exit)+towardHost*exit;pitch=step.cameraPitch||0;camera.rotation.set(pitch,yaw,0);}clientSpeed=Math.abs(z-previousZ)/Math.max(dt,.001);
    if(step.phase==='complete'){follower.reset();if(!connectedVisit)hostMotion=createHostMotion(presenterAvatar.position,clientAvatar.position,blocked);}
    $('arrival-status').hidden=step.phase==='complete';$('arrival-status').textContent=audio.error?'Welcome paused · tap Retry welcome':step.phase==='rising'?'↑ '+step.floor+' · Ascending to floor 14':step.phase==='arriving'?'Floor 14 · Arriving':step.phase==='opening'?'Floor 14 · Welcome to WPP Production':'Your presenter is waiting';
   }else if(remoteClient){arrivalDoor=Number.isFinite(remoteClient.arrivalDoor)?Math.max(0,Math.min(1,remoteClient.arrivalDoor)):0;world.arrivalLift.set(arrivalDoor,14);}
@@ -382,8 +386,10 @@ try{
   canvas.dataset.doorAngle=world.entryDoor.angle.toFixed(3);
   canvas.dataset.doorTarget=world.entryDoor.targetOpen?'open':'closed';
   canvas.dataset.doorObstructed=String(world.entryDoor.obstructed);
-  presenterSpeed=0;let presenterDirection=null,collaboratorSpeed=0;const movement=joystick.update(keys,active&&!introRunning&&!seatMotions[role].active&&(role==='presenter'&&!presenterMovementLocked||role==='collaborator'||role==='client'&&!following&&!visitingBrian&&!(clientAvatar.userData.actionUntil>now)));
-  if(active&&!introRunning&&!seatMotions[role].active&&(role==='presenter'&&!presenterMovementLocked||role==='collaborator'||role==='client'&&!following&&!visitingBrian&&!(clientAvatar.userData.actionUntil>now))){
+  const pointing={client:isPointing(clientAvatar.userData.socialGesture,now),presenter:isPointing(presenterAvatar.userData.socialGesture,now),collaborator:isPointing(collaboratorAvatar.userData.socialGesture,now)};
+  presenterSpeed=0;let presenterDirection=null,clientDirection=null,collaboratorSpeed=0,presenterPose={speed:0,gesture:'idle'};
+  const movement=joystick.update(keys,active&&!pointing[role]&&!introRunning&&!seatMotions[role].active&&(role==='presenter'&&!presenterMovementLocked||role==='collaborator'||role==='client'&&!following&&!visitingBrian&&!(clientAvatar.userData.actionUntil>now)));
+  if(active&&!pointing[role]&&!introRunning&&!seatMotions[role].active&&(role==='presenter'&&!presenterMovementLocked||role==='collaborator'||role==='client'&&!following&&!visitingBrian&&!(clientAvatar.userData.actionUntil>now))){
    const startX=camera.position.x,startZ=camera.position.z;
    const {forward,side}=movement,step=1.8*dt;
    const dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*step,dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*step;
@@ -393,19 +399,17 @@ try{
    for(let i=0;i<steps;i++){if(!cameraBlocked(camera.position.x+dx/steps,camera.position.z))camera.position.x+=dx/steps;if(!cameraBlocked(camera.position.x,camera.position.z+dz/steps))camera.position.z+=dz/steps;}
    if(role==='presenter'){presenterSpeed=Math.hypot(camera.position.x-startX,camera.position.z-startZ)/Math.max(dt,.001);presenterAvatar.position.set(camera.position.x,0,camera.position.z);if(presenterSpeed>.025)presenterDirection=Math.atan2(camera.position.x-startX,camera.position.z-startZ);}
    if(role==='collaborator'){collaboratorSpeed=Math.hypot(camera.position.x-startX,camera.position.z-startZ)/Math.max(dt,.001);collaboratorAvatar.position.set(camera.position.x,0,camera.position.z);if(collaboratorSpeed>.025)collaboratorAvatar.userData.face(Math.atan2(camera.position.x-startX,camera.position.z-startZ));}
-   if(role==='client'){clientAvatar.position.set(camera.position.x,0,camera.position.z);clientAvatar.userData.face(yaw+Math.PI);clientSpeed=Math.hypot(camera.position.x-startX,camera.position.z-startZ)/Math.max(dt,.001);}
+   if(role==='client'){clientAvatar.position.set(camera.position.x,0,camera.position.z);clientSpeed=Math.hypot(camera.position.x-startX,camera.position.z-startZ)/Math.max(dt,.001);clientDirection=clientSpeed>.025?headingToward({x:startX,z:startZ},camera.position):yaw+Math.PI;}
   }
   canvas.dataset.position=camera.position.toArray().map(v=>v.toFixed(3)).join(',');
   canvas.dataset.blocked=String(blocked(camera.position.x,camera.position.z));
-  if(active&&role==='presenter'){
-   presenterAvatar.userData.animate(dt,{speed:presenterSpeed,direction:presenterDirection,gesture:'idle'});
-   canvas.dataset.presenterSpeaking='false';canvas.dataset.presenterGesture=presenterAvatar.userData.animation.gesture;
-  }
+  if(pointing.client)clientSpeed=0;
+  if(role==='presenter')presenterPose={speed:presenterSpeed,direction:presenterDirection??yaw+Math.PI,gesture:'idle'};
   if(role!=='presenter'&&active&&presenterAvatar.visible){
    // The collaborator's inspection camera frames both people at their current
    // positions. Keep the host there, with body gestures, rather than walking
    // behind walls or out of that frame while the observer inspects the client.
-   const pose=remotePresenter?{speed:remotePresenter.speed||0,gesture:remotePresenter.gesture||'idle'}:role==='client'&&!presenterSeat&&!visitingBrian&&!introRunning&&!seatMotions.client.active&&hostPlaying&&hostMotion?hostMotion.update(dt):{speed:0,gesture:'idle'};
+   const pose=remotePresenter?{speed:remotePresenter.speed||0,gesture:remotePresenter.gesture||'idle'}:role==='client'&&!pointing.presenter&&!presenterSeat&&!visitingBrian&&!introRunning&&!seatMotions.client.active&&hostPlaying&&hostMotion?hostMotion.update(dt):{speed:0,gesture:'idle'};
    let clearOfClient=true;
    if(pose.x!==undefined){
     const p=presenterAvatar.position,dx=pose.x-p.x,dz=pose.z-p.z,l=dx*dx+dz*dz,t=l?THREE.MathUtils.clamp(((clientAvatar.position.x-p.x)*dx+(clientAvatar.position.z-p.z)*dz)/l,0,1):0;
@@ -415,13 +419,11 @@ try{
    else if(pose.x!==undefined)pose.speed=0;
    const speaking=speechState.speaking&&speechState.zone!=='arrival';
    if(speaking&&pose.speed<.02)pose.gesture='explain';
-   if(speaking&&pose.speed<.02)presenterAvatar.userData.face(Math.atan2(clientAvatar.position.x-presenterAvatar.position.x,clientAvatar.position.z-presenterAvatar.position.z));
-   presenterAvatar.userData.animate(dt,{...pose,speaking,lookAt:clientAvatar.position});
-   canvas.dataset.presenterSpeaking=String(speaking);canvas.dataset.presenterGesture=presenterAvatar.userData.animation.gesture;
+   presenterPose={...pose,speaking};
   }
   if(active&&visitingBrian){
    clientSpeed=0;$('walk-controls').hidden=true;
-   if(workstationVisit.phase==='approaching'&&!(clientAvatar.userData.actionUntil>now)){
+   if(workstationVisit.phase==='approaching'&&!pointing.client&&!(clientAvatar.userData.actionUntil>now)){
     const pose=workstationVisit.update(dt,clientAvatar.position);clientSpeed=pose.speed;clientAvatar.position.set(pose.x,0,pose.z);camera.position.set(pose.x,eyeHeight,pose.z);
     if(pose.speed>.01)clientAvatar.userData.face(pose.direction);
     if(!dragging){const target=pose.arrived?Math.atan2(pose.x-collaboratorStation.x,pose.z-collaboratorStation.z):pose.speed>.01?pose.direction-Math.PI:yaw;yaw+=Math.atan2(Math.sin(target-yaw),Math.cos(target-yaw))*(1-Math.exp(-dt*4));camera.rotation.set(pitch,yaw,0);}
@@ -430,8 +432,8 @@ try{
   }
   const controlsClient=(!connectedVisit||role==='client'&&remotePresenter)&&!(role!=='client'&&remoteClient);
   let seatingPose=null;
-  if(active&&!introRunning&&controlsClient&&!(clientAvatar.userData.actionUntil>now))seatingPose=followSeating.update(dt,{enabled:following&&!visitingBrian,presenter:presenterAvatar.position,client:clientAvatar.position,presenterSeat});
-  if(active&&!introRunning&&following&&!(clientAvatar.userData.actionUntil>now)&&controlsClient&&(seatingPose||!seatMotions.client.active)){
+  if(active&&!introRunning&&!pointing.client&&controlsClient&&!(clientAvatar.userData.actionUntil>now))seatingPose=followSeating.update(dt,{enabled:following&&!visitingBrian,presenter:presenterAvatar.position,client:clientAvatar.position,presenterSeat});
+  if(active&&!introRunning&&!pointing.client&&following&&!(clientAvatar.userData.actionUntil>now)&&controlsClient&&(seatingPose||!seatMotions.client.active)){
    const pose=seatingPose||follower.update(dt,clientAvatar.position,presenterAvatar.position,blocked);clientSpeed=pose.speed;
    clientAvatar.position.set(pose.x,0,pose.z);if(pose.speed>.01)clientAvatar.userData.face(pose.direction);
    if(role==='client'){
@@ -446,13 +448,30 @@ try{
    else if(active&&seatMotions[person].active){const pose=seatMotions[person].update(dt);avatar.position.set(pose.x,0,pose.z);avatar.userData.face(pose.heading);avatar.userData.seated=pose.weight;avatar.userData.seatId=pose.id;if(person==='client'&&pose.weight>0)clientSpeed=0;if(person===role)camera.position.set(pose.x,eyeHeight-.48*pose.weight,pose.z);}
    else if(!seatMotions[person].active){avatar.userData.seated=0;avatar.userData.seatId=null;}
   }
-  // Seat state arrives after navigation; update the presenter's own rig with the
-  // current blend rather than the previous frame's sitting height.
-  if(active&&role==='presenter'&&seatMotions.presenter.active)presenterAvatar.userData.animate(0,{speed:0});
-  clientPose={x:clientAvatar.position.x,z:clientAvatar.position.z,yaw:role==='client'?yaw:clientAvatar.rotation.y-Math.PI,pitch:role==='client'?pitch:-.04};
-  if(active){const acting=clientAvatar.userData.actionUntil>now;if(acting){clientSpeed=0;const target=people[clientAvatar.userData.actionTarget];if(target)clientAvatar.userData.face(Math.atan2(target.position.x-clientAvatar.position.x,target.position.z-clientAvatar.position.z));}clientAvatar.userData.animate(dt,{speed:clientSpeed,gesture:'idle',lookAt:people[clientAvatar.userData.actionTarget]?.position||presenterAvatar.position});collaboratorAvatar.userData.animate(dt,{speed:collaboratorSpeed,lookAt:collaboratorAvatar.userData.attentionUntil>now?people[collaboratorAvatar.userData.attentionFrom]?.position:null});}
+  if(active){
+   const clientSeated=clientAvatar.userData.seated>0,presenterSeated=presenterAvatar.userData.seated>0;
+   const pairAvailable=connectedVisit?(role==='client'?remotePresenter:role==='presenter'?remoteClient:remoteClient&&remotePresenter):presenterAvailable;
+   const headings=pairAvailable&&!visitingBrian?conversationHeadings(clientAvatar.position,presenterAvatar.position,(client,presenter)=>{
+    const from={x:client.x,y:1.57-.48*Number(clientSeated),z:client.z};
+    const to={x:presenter.x,y:1.57-.48*Number(presenterSeated),z:presenter.z};
+    return liftSeparates(from,to,arrivalDoor)||segmentOccluded(from,to,world.office.solids);
+   }):null;
+   if(clientAvatar.userData.actionUntil>now){
+    clientSpeed=0;
+    const target=people[clientAvatar.userData.actionTarget];
+    if(target&&!clientSeated&&!remoteClient)clientDirection=headingToward(clientAvatar.position,target.position);
+   }else if(headings&&!introRunning&&!clientSeated&&!remoteClient&&clientSpeed<.025)clientDirection=headings.client;
+   if(headings&&!presenterSeated&&!remotePresenter&&presenterPose.speed<.025)presenterPose.direction=headings.presenter;
+   if(presenterSeated)presenterPose.direction=null;
+   if(clientSeated)clientDirection=null;
+   if(role==='presenter'||presenterAvatar.visible)presenterAvatar.userData.animate(dt,{...presenterPose,lookAt:headings?clientAvatar.position:null,now});
+   clientAvatar.userData.animate(dt,{speed:clientSpeed,direction:clientDirection,lookAt:clientAvatar.userData.actionUntil>now?people[clientAvatar.userData.actionTarget]?.position:headings?presenterAvatar.position:null,now});
+   collaboratorAvatar.userData.animate(dt,{speed:collaboratorSpeed,lookAt:collaboratorAvatar.userData.attentionUntil>now?people[collaboratorAvatar.userData.attentionFrom]?.position:null,now});
+   canvas.dataset.presenterSpeaking=String(Boolean(presenterPose.speaking));canvas.dataset.presenterGesture=presenterAvatar.userData.animation?.gesture||'idle';
+  }
+  clientPose={x:clientAvatar.position.x,z:clientAvatar.position.z,yaw:role==='client'?yaw:(clientAvatar.userData.heading??clientAvatar.rotation.y)-Math.PI,pitch:role==='client'?pitch:-.04};
   for(const item of attentionRings){item.ring.visible=item.until>now;item.ring.material.opacity=.45+.4*Math.sin(now*.009)**2;}
-  if(now-lastPublish>100){const actor=people[role],pose={arriving:role==='client'&&!previewOffice&&arrivalIntro.active,arrivalDoor:role==='client'?arrivalDoor:undefined,x:actor.position.x,z:actor.position.z,heading:actor.rotation.y,...(role==='presenter'?{door:{angle:world.entryDoor.angle,open:world.entryDoor.targetOpen,obstructed:world.entryDoor.obstructed}}:{}),seat:{id:actor.userData.seatId||null,weight:actor.userData.seated||0},speed:role==='client'?clientSpeed:role==='presenter'?presenterSpeed:collaboratorSpeed,gesture:actor.userData.animation?.gesture||'idle'};if(poseRate.shouldSend(now,pose))visitControls.publishPose(pose);lastPublish=now;}
+  if(now-lastPublish>100){const actor=people[role],pose={arriving:role==='client'&&!previewOffice&&arrivalIntro.active,arrivalDoor:role==='client'?arrivalDoor:undefined,x:actor.position.x,z:actor.position.z,heading:actor.userData.heading??actor.rotation.y,...(role==='presenter'?{door:{angle:world.entryDoor.angle,open:world.entryDoor.targetOpen,obstructed:world.entryDoor.obstructed}}:{}),seat:{id:actor.userData.seatId||null,weight:actor.userData.seated||0},speed:role==='client'?clientSpeed:role==='presenter'?presenterSpeed:collaboratorSpeed,gesture:actor.userData.animation?.gesture||'idle'};if(poseRate.shouldSend(now,pose))visitControls.publishPose(pose);lastPublish=now;}
   canvas.dataset.following=String(following);canvas.dataset.clientSpeed=clientSpeed.toFixed(3);canvas.dataset.collaboratorVisible=String(collaboratorAvatar.visible);canvas.dataset.collaboratorSeated=String(collaboratorAvatar.userData.seated||0);
   canvas.dataset.clientAvatarVisible=String(clientAvatar.visible);
   canvas.dataset.clientPosition=[clientAvatar.position.x,clientAvatar.position.z].map(v=>v.toFixed(3)).join(',');
@@ -485,6 +504,6 @@ try{
   canvas.dataset.triangles=String(renderer.info.render.triangles);
  });
  // Read-only diagnostics for checking the pilot.
- window.officePilot=Object.freeze({snapshot:()=>({position:camera.position.toArray(),yaw,pitch,paused:!$('welcome').hidden,blocked:blocked(camera.position.x,camera.position.z),render:{...renderer.info.render}})});
+ window.officePilot=Object.freeze({snapshot:()=>({position:camera.position.toArray(),yaw,pitch,paused:!$('welcome').hidden,blocked:blocked(camera.position.x,camera.position.z),avatars:Object.fromEntries(Object.entries(people).map(([person,actor])=>[person,{x:actor.position.x,z:actor.position.z,heading:actor.rotation.y,gesture:actor.userData.animation?.gesture,seated:actor.userData.seated,seat:actor.userData.seatId}])),render:{...renderer.info.render}})});
  window.addEventListener('pagehide',()=>visitAudioOutput.destroy(),{once:true});
 }catch(error){fail(error);}

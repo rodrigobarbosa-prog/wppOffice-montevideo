@@ -10,8 +10,9 @@ export function setupSocialControls({scene,camera,people,getRole,isActive,onGest
  function cancel(){choosing=false;hint.hidden=true;buttons.point.textContent='☝ Point';buttons.point.setAttribute('aria-pressed','false');}
  function play(kind,point,role=getRole()){
   if(!validSocialGesture(kind,point)||!people[role])return;
-  people[role].userData.socialGesture={kind,point:point?{...point}:null,started:performance.now()};
-  if(kind==='point'){let marker=markers.get(role);if(!marker){marker=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:role==='client'?'#f7d474':role==='presenter'?'#66e7d2':'#e9a3cf',depthTest:true,transparent:true}));markerGroup.add(marker);markers.set(role,marker);}marker.position.set(point.x,point.y,point.z);marker.userData.until=performance.now()+socialGestures.point*1000;}
+  const actor=people[role],started=performance.now();
+  actor.userData.socialGesture={kind,point:point?{...point}:null,started,heading:actor.rotation.y};
+  if(kind==='point'){let marker=markers.get(role);if(!marker){marker=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:role==='client'?'#f7d474':role==='presenter'?'#66e7d2':'#e9a3cf',depthTest:true,transparent:true}));markerGroup.add(marker);markers.set(role,marker);}marker.position.set(point.x,point.y,point.z);marker.userData.until=started+socialGestures.point*1000;}
  }
  function confirm(){
   if(!choosing||!isActive())return false;

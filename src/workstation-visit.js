@@ -1,15 +1,19 @@
 import {createClientFollower,findFollowPath} from './client-follow.js';
 
-export function createWorkstationVisit({station,blocked}){
- const walker=createClientFollower({distance:.12});let phase='idle',goal=null;
+export function createWorkstationVisit({station,blocked,occluded}){
+ const step=station.approachPoints?.length? .20 : undefined;
+ const walker=createClientFollower({distance:.12,occluded,step});let phase='idle',goal=null;
  return {
   get phase(){return phase;},
   start(client){
    const candidates=[];
-   for(const distance of [1.25,1.75])for(const [dx,dz] of [[1,0],[1,1],[1,-1],[0,1],[0,-1],[-1,0]]){
-    const length=Math.hypot(dx,dz),point={x:station.x+dx/length*distance,z:station.z+dz/length*distance};
+   const points=station.approachPoints||[1.25,1.75].flatMap(distance=>[[1,0],[1,1],[1,-1],[0,1],[0,-1],[-1,0]].map(([dx,dz])=>{
+    const length=Math.hypot(dx,dz);
+    return {x:station.x+dx/length*distance,z:station.z+dz/length*distance};
+   }));
+   for(const point of points){
     if(blocked(point.x,point.z))continue;
-    const path=findFollowPath(client,point,blocked);if(!path.length)continue;
+    const path=findFollowPath(client,point,blocked,{occluded,step});if(!path.length)continue;
     let cost=0,previous=client;for(const p of path){cost+=Math.hypot(p.x-previous.x,p.z-previous.z);previous=p;}
     candidates.push({point,cost});
    }

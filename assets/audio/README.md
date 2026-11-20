@@ -1,8 +1,8 @@
-# Unified English voiceover · 2026-11-11
+# Unified English voiceover · 2026-11-20
 
 All active narration uses Kokoro bm_fable (en-gb), speed 1.02, with no pitch
 conversion. Welcome: 5.259 seconds. The same speaker and mastering chain render
-arrival, entrance, office, meeting room and kitchen. voice-manifest.json records
+arrival, entrance, office, meeting room and kitchen. The visit clips last 3–6 seconds. voice-manifest.json records
 scripts, duration, signal levels and clipping checks for each recording.
 
 Mastering: 70 Hz high-pass, +1.5 dB presence at 2.6 kHz, level matching around

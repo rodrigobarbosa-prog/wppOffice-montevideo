@@ -1,4 +1,14 @@
 export const visitRoles=['client','presenter','collaborator'];
+export function headingToward(from,to){
+ return Math.atan2(to.x-from.x,to.z-from.z);
+}
+
+export function conversationHeadings(client,presenter,occluded){
+ const distance=Math.hypot(client.x-presenter.x,client.z-presenter.z);
+ if(distance<.55||distance>4.5||occluded(client,presenter))return null;
+ return {client:headingToward(client,presenter),presenter:headingToward(presenter,client)};
+}
+
 export function avatarVisibility(role,presenterAvailable=true){
  return {client:role!=='client',presenter:role!=='presenter'&&presenterAvailable};
 }

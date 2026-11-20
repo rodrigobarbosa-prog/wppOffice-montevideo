@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {materials,leafMesh} from './materials.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {partition,passageDesks,officeDesks,exteriorDesk,aisleEndDesk,chairYawForSide,serviceWall,kitchen,perimeterDesk,kitchenWindowBay,kitchenWindowDesk,officeWest,cornerColumn,meetingRooms,meetingColumn,officeShiftZ,collaboratorDesk} from './office-layout.js';
+import {partition,passageDesks,officeDesks,exteriorDesk,aisleEndDesk,chairYawForSide,serviceWall,kitchen,perimeterDesk,kitchenWindowBay,kitchenWindowDesk,officeWest,cornerColumn,meetingRooms,meetingColumn,officeShiftZ,collaboratorDesk,collaboratorSeatIndex,collaboratorSide} from './office-layout.js';
 import {entryVestibule,entryBrandWall} from './arrival-layout.js';
 import {createArrivalFinishes,createSurfaceMaterials} from './surface-materials.js';
 import {ceilingPlan} from './ceiling-layout.js';
@@ -331,7 +331,7 @@ export async function buildRouteWorld(scene){
     rounded(.52,.32,.024,monitorX,1.06,0,black,g,.008);
     rounded(.31,.19,.027,monitorX,1.052,-.02,shell,g,.012);
     const screen=new THREE.Mesh(new THREE.PlaneGeometry(.48,.275),screens[(i+(side===1?1:0))%4]);screen.position.set(monitorX,1.065,.019);g.add(screen);
-    if(x===collaboratorDesk.x&&z===collaboratorDesk.z&&i===0&&side===1&&!wall)screen.userData.collaboratorScreen=true;
+    if(x===collaboratorDesk.x&&z===collaboratorDesk.z&&i===collaboratorSeatIndex&&side===collaboratorSide&&!wall)screen.userData.collaboratorScreen=true;
     const neck=rounded(.033,.16,.025,monitorX,.866,-.025,steel,g,.007);neck.rotation.x=-.15;
     rounded(.20,.012,.145,monitorX,.778,.015,black,g,.012);
     const power=cylinder(.0018,.001,monitorX+.225,.915,.013,glow,g);power.rotation.x=Math.PI/2;
@@ -482,7 +482,7 @@ function batchOpaqueMeshes(root){
  root.updateWorldMatrix(true,true);
  const inverse=root.matrixWorld.clone().invert(),batches=new Map();
  root.traverse(mesh=>{
-  if(!mesh.isMesh||mesh.material.transparent||Array.isArray(mesh.material))return;
+  if(!mesh.isMesh||mesh.userData.collaboratorScreen||mesh.material.transparent||Array.isArray(mesh.material))return;
   const key=mesh.material.uuid+':'+Boolean(mesh.geometry.index);
   if(!batches.has(key))batches.set(key,[]);batches.get(key).push(mesh);
  });

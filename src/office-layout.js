@@ -50,5 +50,15 @@ export const aisleEndDesk={x:entryAisleRow.x,z:(-4.05+deskEndLimit)/2,length:des
 // Chair model faces local +Z; seated users face toward the table, unlike screens.
 export function chairYawForSide(side){return side>0?Math.PI:0;}
 
-export const collaboratorDesk=passageDesks[2];
-export const collaboratorStation={x:collaboratorDesk.x+1.08,z:collaboratorDesk.z+collaboratorDesk.length/2-collaboratorDesk.length/collaboratorDesk.seats/2+officeShiftZ,yaw:-Math.PI/2};
+// The marked chair is on the west side of the run next to the partition-side aisle.
+export const collaboratorDesk=officeDesks[2];
+export const collaboratorSeatIndex=2;
+export const collaboratorSide=-1;
+const station={
+ x:collaboratorDesk.x+collaboratorSide*1.08,
+ z:collaboratorDesk.z+collaboratorDesk.length/2-(collaboratorSeatIndex+.5)*collaboratorDesk.length/collaboratorDesk.seats+officeShiftZ,
+ yaw:chairYawForSide(collaboratorSide)+collaboratorDesk.rotation
+};
+const halfModule=collaboratorDesk.length/collaboratorDesk.seats/2;
+// Use the gaps between neighboring chairs on either side of the bench.
+export const collaboratorStation={...station,approachPoints:[-.61,2.22].flatMap(offset=>[-halfModule,halfModule].map(gap=>({x:station.x-offset*collaboratorSide,z:station.z+gap})))};

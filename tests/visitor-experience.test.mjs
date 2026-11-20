@@ -48,9 +48,9 @@ test('narration waits for start, deduplicates areas, switches language and cance
  voice.setEnabled(false);voice.setPaused(false);assert.equal(h.spoken.length,2);
  voice.destroy();assert.ok(h.cancels>=4);
 });
-test('captions survive missing audio support and include usable door instructions',()=>{
+test('captions survive missing audio support and welcome visitors at the entrance',()=>{
  const voice=createTourVoice({});voice.visit('Acceso');voice.setPaused(false);
- assert.equal(voice.state().supported,false);assert.match(voice.state().text,/presentador abre la puerta/);
+ assert.equal(voice.state().supported,false);assert.match(voice.state().text,/empieza la visita/);assert.doesNotMatch(voice.state().text,/puerta|abrir/i);
  assert.match(voice.state().error,/captions/);
  assert.match(narrationFor('Sala 01','en').text,/meeting rooms/);
 });
