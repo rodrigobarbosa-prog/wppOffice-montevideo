@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {renderProfile} from './render-profile.js';
 import {createCameraLook,followCameraAngles} from './camera-look.js';
+import {createMotionLook} from './motion-look.js';
 import {avatarStepBlocked} from './avatar-collision.js';
 import {setupSocialControls} from './social-controls.js';
 import {isPointing} from './social-gesture.js';
@@ -191,6 +192,43 @@ try{
  }});
  if(previewOffice)narrator.setEnabled(false);
  function updateCaptions(){const state=narrator.state();$('narration-panel').hidden=!narrationPolicy(role).captions||!captionsVisible||!state.text;$('captions-toggle').textContent=captionsVisible?'Disable subtitles':'Enable subtitles';$('captions-toggle').setAttribute('aria-pressed',String(captionsVisible));document.body.classList.toggle('has-captions',narrationPolicy(role).captions&&captionsVisible&&Boolean(state.text));}
+ const motionLook=createMotionLook(),motionButton=$('motion-look');
+ let motionEnabled=false,motionTimer=null;
+ function stopMotion(label='Motion controls: off'){
+  motionEnabled=false;
+  clearTimeout(motionTimer);motionTimer=null;
+  window.removeEventListener('deviceorientation',receiveMotion);
+  motionLook.reset();
+  motionButton.textContent=label;motionButton.setAttribute('aria-pressed','false');
+ }
+ function receiveMotion(event){
+  if(!motionLook.input(event)||motionTimer===null)return;
+  clearTimeout(motionTimer);motionTimer=null;motionButton.textContent='Motion controls: on';
+ }
+ async function enableMotion(){
+  if(motionButton.hidden||motionButton.disabled||motionEnabled)return;
+  motionButton.disabled=true;
+  try{
+   const orientation=window.DeviceOrientationEvent;
+   if(typeof orientation?.requestPermission==='function'&&await orientation.requestPermission()!=='granted'){
+    stopMotion('Motion permission denied · drag to look');return;
+   }
+   motionEnabled=true;
+   motionButton.setAttribute('aria-pressed','true');
+   motionButton.textContent='Waiting for motion sensor…';
+   motionTimer=setTimeout(()=>stopMotion('Motion sensor unavailable · drag to look'),2500);
+   window.addEventListener('deviceorientation',receiveMotion,{passive:true});
+  }catch{stopMotion('Motion controls unavailable · drag to look');}
+  finally{motionButton.disabled=false;}
+ }
+ if(renderProfile.mobile&&('DeviceOrientationEvent' in window||!window.isSecureContext)){
+  motionButton.hidden=false;
+  if(!window.isSecureContext){
+   motionButton.textContent='Motion controls require HTTPS';motionButton.disabled=true;
+  }
+  motionButton.onclick=()=>{if(motionEnabled)stopMotion();else void enableMotion();};
+  window.addEventListener('pagehide',()=>stopMotion());
+ }
  $('camera-view').onchange=e=>{cameraView=e.target.value;canvas.focus();};
  $('voice-toggle').onclick=()=>{const retry=narrator.state().needsActivation;void visitAudioOutput.unlock().then(()=>{if(retry)narrator.retry();else narrator.setEnabled(!narrator.state().enabled);});};
  const enableAudio=document.createElement('button');enableAudio.textContent='Enable audio';enableAudio.hidden=true;enableAudio.id='audio-enable';$('voice-toggle').parentElement.append(enableAudio);
@@ -363,11 +401,13 @@ try{
  function pause(){if(hasStarted&&$('welcome').hidden)showDialog('pause');}
  enter.onclick=()=>{
   if(visitControls.rejected())return;
+  const firstEntry=!hasStarted;
   if(clientArrival&&role==='client'&&!hasStarted){$('welcome').classList.add('departing');setTimeout(()=>$('welcome').classList.remove('departing'),700);}
   hasStarted=true;$('welcome').hidden=true;$('tour-ui').hidden=false;$('crosshair').hidden=false;
   canvas.style.cursor='grab';canvas.focus();
   visitControls.unlock();
   if(role==='client'&&!previewOffice&&arrivalIntro.active){arrivalIntro.start(arrivalAudio.state().duration);narrator.setPaused(true);if(!arrivalAudio.state().finished)void arrivalAudio.play();}else{narrator.visit(world.locationAt(camera.position.x,camera.position.z));narrator.setPaused(role!=='presenter'&&!hostPlaying);}
+  if(firstEntry)void enableMotion();
  };
  $('arrival-audio-retry').onclick=()=>{void visitAudioOutput.unlock().then(()=>arrivalAudio?.retry());canvas.focus();};
  $('pause').onclick=pause;$('help').onclick=()=>showDialog('guide');$('guide-toggle').onclick=()=>showDialog('guide');
@@ -449,6 +489,8 @@ try{
   const presenterSeat=remotePresenter?remotePresenter.seat?.id:seatMotions.presenter.state?.phase!=='standing'?seatMotions.presenter.state?.seat.id:null;
   const introRunning=role==='client'&&!previewOffice&&arrivalIntro.active;
   const visitingBrian=role==='client'&&workstationVisit.phase!=='idle';
+  const motion=motionLook.update(yaw,pitch,elapsed,motionEnabled&&active&&!document.hidden&&cameraView==='first'&&!introRunning&&!visitingBrian&&$('screen-panel').hidden&&!motionButton.closest('details').open);
+  if(motion.changed){yaw=motion.yaw;pitch=motion.pitch;camera.rotation.set(pitch,yaw,0);}
   const {waiting:presenterWaiting,lockMovement:presenterMovementLocked}=presenterWaitState({role,connected:connectedVisit,client:remoteClient});
   narrator.setPaused(!active||!hostPlaying||visitingBrian||introRunning);
   $('screen-open').disabled=role==='client'&&!previewOffice&&arrivalDoor<.999;$('avatar-attention').disabled=$('screen-open').disabled;
@@ -575,7 +617,7 @@ try{
    collaboratorAvatar.userData.animate(dt,{speed:collaboratorSpeed,lookAt:collaboratorAvatar.userData.attentionUntil>now?people[collaboratorAvatar.userData.attentionFrom]?.position:null,now});
    canvas.dataset.presenterSpeaking=String(Boolean(presenterPose.speaking));canvas.dataset.presenterGesture=presenterAvatar.userData.animation?.gesture||'idle';
   }
-  const trackPresenter=active&&role==='client'&&following&&presenterAvatar.visible&&!introRunning&&!visitingBrian&&!pointing.client&&!dragging&&now-lastManualLook>1200;
+  const trackPresenter=active&&role==='client'&&following&&presenterAvatar.visible&&!introRunning&&!visitingBrian&&!pointing.client&&!dragging&&!motion.active&&now-lastManualLook>1200;
   const presenterFocus=trackPresenter?{x:presenterAvatar.position.x,y:presenterAvatar.position.y+1.32-.48*(presenterAvatar.userData.seated||0),z:presenterAvatar.position.z}:null;
   if(presenterFocus){
    ({yaw,pitch}=followCameraAngles(camera.position,presenterFocus,yaw,pitch,dt));
