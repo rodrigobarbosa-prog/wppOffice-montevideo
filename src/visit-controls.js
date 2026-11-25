@@ -43,12 +43,11 @@ export function setupVisitControls({workstationDisplay,onExplore,onAttention,onG
  function publish(){session.publish({screenVisit,role,name:displayName,mic:mediaState.mic,sharing:mediaState.sharing,joined,...pose,sequence:++stateSequence});}
  function update(){
   $('admission-panel').hidden=role!=='presenter'||!waitingCount;$('host-invites').hidden=role!=='presenter';
-  $('mic-toggle').textContent=mediaState.micPending?'Mic: connecting…':mediaState.mic?'Mic: on':'Mic: off';
+  $('mic-toggle').title=mediaState.micPending?'Connecting microphone…':mediaState.mic?'Microphone on':'Microphone off';
   $('mic-noise-state').textContent=!mediaState.mic?'Noise reduction · automatic voice level ready':mediaState.noiseMode==='balanced'?'Noise reduction · automatic voice level · no voice gate':'Browser noise reduction · automatic voice level';
   $('mic-toggle').setAttribute('aria-pressed',String(mediaState.mic));$('mic-toggle').disabled=Boolean(mediaState.micPending);
-  $('follow-toggle').hidden=role!=='client';$('follow-toggle').disabled=screenVisit!=='idle';$('workstation-trip').hidden=screenVisit!=='approaching';$('follow-toggle').textContent=following?'Explore office':'Follow presenter';
+  $('workstation-trip').hidden=screenVisit!=='approaching';
   $('screen-share').hidden=role!=='collaborator';$('screen-share').textContent=mediaState.sharing?'Stop sharing':'Share screen';$('screen-share').disabled=Boolean(mediaState.screenPending);
-  $('screen-open').textContent='View Brian’s screen';
   for(const name of Object.keys(labels)){
    const peer=[...remotes.values()].find(p=>p.role===name);
    const on=name===role?mediaState.mic:peer?.mic||false;
@@ -69,7 +68,7 @@ export function setupVisitControls({workstationDisplay,onExplore,onAttention,onG
   onWaiting:queue=>{waitingCount=queue.length;const panel=$('admission-panel'),list=$('admission-queue');panel.hidden=role!=='presenter'||!waitingCount;list.replaceChildren();for(const guest of queue){const card=document.createElement('div'),title=document.createElement('strong'),copy=document.createElement('p'),button=document.createElement('button');card.className='admission-notice';title.textContent=guest.name;copy.textContent='Requested to join the visit';button.textContent='Admit';button.setAttribute('aria-label','Admit '+guest.name);button.onclick=()=>{button.disabled=true;button.textContent='Admitting…';session.admit(guest.id);};card.append(title,copy,button);list.append(card);}},
   onRejected:reason=>{rejected=true;media.destroy();if(new URL(location.href).searchParams.get('modo')==='client'){$('enter').disabled=true;$('status').textContent='Return to your invitation to request access again.';$('welcome-title').textContent='Your visit will be ready soon';$('welcome').hidden=false;$('tour-ui').hidden=true;return;}$('enter').disabled=true;$('status').textContent=reason==='host-required'?'The presenter needs to join first. Return to the lobby to try again.':'This role is already occupied in the room. Return to the lobby and choose an available role.';$('welcome-title').textContent=reason==='host-required'?'Waiting for the presenter':'Role already connected';$('welcome').hidden=false;$('tour-ui').hidden=true;$('connection-state').textContent='Role already occupied';},
   onScreen:(stream,id)=>{if(stream)remoteScreens.set(id,stream);else remoteScreens.delete(id);attachScreen();},
-  onAttention:(data,id)=>{if(!Object.hasOwn(labels,data?.from))return;if(data.kind==='gesture'){if(remotes.get(id)?.role===data.from&&validSocialGesture(data.gesture,data.point))onGesture(data.gesture,data.point,data.from);return;}if(!Object.hasOwn(labels,data?.target))return;toast(data.kind==='screen'?labels[data.from]+' is viewing Brian’s screen.':labels[data.from]+' is asking for '+labels[data.target]+'’s attention.');onAttention(data.target,data.from);}
+  onAttention:(data,id)=>{if(!Object.hasOwn(labels,data?.from))return;if(data.kind==='gesture'){if(remotes.get(id)?.role===data.from&&validSocialGesture(data.gesture,data.point))onGesture(data.gesture,data.point,data.from);return;}if(!Object.hasOwn(labels,data?.target))return;toast(data.kind==='screen'?labels[data.from]+' is viewing Brian’s screen.':labels[data.from]+' is asking for '+labels[data.target]+'’s attention.');onAttention(data.target,data.from,data.kind);}
  });
  const media=createVisitMedia({devices:navigator.mediaDevices,prepareAudio:()=>visitAudioOutput.unlock(),processAudio:stream=>processMicrophone(stream,{context:visitAudioOutput.getContext()}),
   onChange:next=>{mediaState=next;update();publish();if(next.error)toast(next.error);},
@@ -82,10 +81,13 @@ export function setupVisitControls({workstationDisplay,onExplore,onAttention,onG
  function closeScreen(){const visiting=screenVisit!=='idle';screenVisit='idle';$('screen-panel').hidden=true;if(visiting){onScreenVisit(false);following=true;onExplore(false);}update();publish();}
  function interact(target,kind){if(target===role||!Object.hasOwn(labels,target))return;
   if(kind==='screen'&&target==='collaborator'&&role==='client'){
-   if(!onScreenVisit(true)){toast('No clear route to Brian’s desk. Move closer and try again.');return;}
-   screenVisit='approaching';following=false;update();publish();toast('Walking to Brian’s desk. The presenter will wait.');
+   const destination=onScreenVisit(true);
+   if(!destination){toast('No clear route to Brian’s desk. Move closer and try again.');return;}
+   following=false;
+   if(destination==='viewing')showScreen();
+   else{screenVisit='approaching';update();publish();toast('Walking to Brian’s desk. The presenter will wait.');}
   }else if(kind==='screen'&&target==='collaborator')showScreen();else toast('Attention requested: '+labels[target]);
-  session.attention({from:role,target,kind});onAttention(target,role);
+  session.attention({from:role,target,kind});onAttention(target,role,kind);
  }
  $('screen-open').onclick=()=>interact('collaborator','screen');
  $('screen-close').onclick=closeScreen;$('workstation-cancel').onclick=closeScreen;
@@ -101,10 +103,9 @@ export function setupVisitControls({workstationDisplay,onExplore,onAttention,onG
   document.querySelector('label[for="view-role"]')?.setAttribute('hidden','');
  }
  if(joined&&invitedRole==='client'){$('return-lobby').textContent='← Your invitation';$('welcome-lobby').textContent='Back to your invitation';}
- $('follow-toggle').onclick=()=>{following=!following;onExplore(!following);update();};
  window.addEventListener('pagehide',()=>{media.destroy();session.destroy();clearScreenTexture();workstationDisplay.dispose();},{once:true});
  update();
- return {interact,arriveScreen:showScreen,screenPhase:()=>screenVisit,waitForClient(value,message){$('presenter-waiting').hidden=role!=='presenter'||!value;if(message)$('presenter-waiting').textContent=message;},setRole(next){role=next;media.setRole(next);update();publish();},unlock(){session.unlock();},
+ return {interact,toggleFollowing(){if(role!=='client'||screenVisit!=='idle')return;following=!following;onExplore(!following);update();},arriveScreen:showScreen,screenPhase:()=>screenVisit,waitForClient(value,message){$('presenter-waiting').hidden=role!=='presenter'||!value;if(message)$('presenter-waiting').textContent=message;},setRole(next){role=next;media.setRole(next);update();publish();},unlock(){session.unlock();},
   gesture(kind,point){if(validSocialGesture(kind,point))session.attention({kind:'gesture',gesture:kind,point,from:role});},
   publishPose(next){pose=next;publish();},
   remotePose(name){const entry=[...remotes].find(([,p])=>p.role===name),peer=entry&&remoteMotion.sample(entry[0],performance.now());return peer&&Number.isFinite(peer.x)&&Number.isFinite(peer.z)&&Math.abs(peer.x)<100&&Math.abs(peer.z)<100?{...peer,heading:Number.isFinite(peer.heading)?peer.heading:0,speed:Number.isFinite(peer.speed)?Math.min(3,Math.max(0,peer.speed)):0,gesture:['idle','walk','welcome','explain'].includes(peer.gesture)?peer.gesture:'idle'}:null;},

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createWorkstationVisit} from '../src/workstation-visit.js';
+import {createWorkstationVisit,isBesideWorkstation} from '../src/workstation-visit.js';
 
 test('client walks to a clear place by Brian, arrives before viewing, and can resume following',()=>{
  const station={x:5,z:0},blocked=(x,z)=>x>2&&x<3&&Math.abs(z)<1;
@@ -15,4 +15,26 @@ test('client walks to a clear place by Brian, arrives before viewing, and can re
 test('blocked workstation never teleports the client or opens the screen',()=>{
  const visit=createWorkstationVisit({station:{x:5,z:5},blocked:()=>true});
  assert.equal(visit.start({x:0,z:0}),false);assert.equal(visit.phase,'idle');
+});
+
+test('a client already in sight of Brian can view without trying to walk',()=>{
+ const client={x:-7.1,z:-8.0455};
+ const visit=createWorkstationVisit({station:{x:-6.58,z:-8.4155},blocked:()=>true,canViewFrom:point=>point===client});
+ assert.equal(visit.start(client),true);
+ assert.equal(visit.phase,'viewing');
+ assert.deepEqual(visit.update(.1,client),{...client,speed:0,arrived:false});
+});
+
+test('Brian’s screen opens directly at his side and routes from across the desk',()=>{
+ const station={x:-6.58,z:-8.4155,yaw:Math.PI/2,approachPoints:[{x:-7.19,z:-7.638}]};
+ const beside=station.approachPoints[0],across={x:-4.36,z:-7.638};
+ const visit=createWorkstationVisit({station,blocked:()=>false,canViewFrom:point=>isBesideWorkstation(station,point)});
+ assert.equal(visit.start(across),true);
+ assert.equal(visit.phase,'approaching');
+ let position=across;
+ for(let i=0;i<500&&visit.phase==='approaching';i++)position=visit.update(.02,position);
+ assert.equal(visit.phase,'viewing');
+ assert.equal(isBesideWorkstation(station,position),true);
+ assert.equal(visit.start(beside),true);
+ assert.equal(visit.phase,'viewing');
 });

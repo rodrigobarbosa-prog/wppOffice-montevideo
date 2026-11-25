@@ -27,34 +27,75 @@ export function thirdPersonPosition(actor,yaw,blocked){
  return {x:best.x,y:best.y,z:best.z};
 }
 
-export function setupAvatarInteractions({canvas,camera,people,solids,getRole,isActive,isDragging,onAction,extraOcclusion=()=>false}){
- const menu=document.getElementById('avatar-actions'),title=document.getElementById('avatar-action-name'),attention=document.getElementById('avatar-attention'),screen=document.getElementById('screen-open');
- const names={client:'Client',presenter:'Presenter',collaborator:'Brian'},ray=new THREE.Raycaster(),pointer=new THREE.Vector2(),anchor=new THREE.Vector3(),hitBox=new THREE.Box3(),hitPoint=new THREE.Vector3();
- let target=null,lastHit=0,lastCheck=0,dismissedUntil=0;
- const hide=()=>{menu.hidden=true;target=null;};
+const exploreAction={kind:'explore',label:'Explore office'};
+const followAction={kind:'follow',label:'Follow presenter'};
+const attentionAction={kind:'attention',label:'Get attention'};
+const brianAction={kind:'brian',label:'Brian’s actions'};
+export function primaryVisitAction({seatAction,target,role,following}){
+ if(seatAction)return seatAction;
+ if(target==='collaborator')return brianAction;
+ if(role!=='client')return null;
+ return following?(target==='presenter'?attentionAction:exploreAction):followAction;
+}
+
+export function setupAvatarInteractions({canvas,camera,people,solids,getRole,isActive,onAction,extraOcclusion=()=>false}){
+ const menu=document.getElementById('avatar-actions'),attention=document.getElementById('avatar-attention'),screen=document.getElementById('screen-open');
+ const attentionLabel=document.getElementById('avatar-attention-label');
+ const names={client:'Client',presenter:'Presenter',collaborator:'Brian'};
+ const ray=new THREE.Raycaster(),pointer=new THREE.Vector2(),hitBox=new THREE.Box3(),hitPoint=new THREE.Vector3();
+ let target=null,lastCheck=-Infinity,dismissedUntil=0,brianMenuOpen=false;
+ function hide(){menu.hidden=true;target=null;brianMenuOpen=false;}
  function occluded(to){
-  if(extraOcclusion(camera.position,to))return true;
-  return segmentOccluded(camera.position,to,solids);
+  return extraOcclusion(camera.position,to)||segmentOccluded(camera.position,to,solids);
  }
- function show(role,now){if(!isActive()){hide();return;}target=role;lastHit=now;menu.hidden=false;title.textContent=names[role];screen.hidden=!avatarActions(role,getRole()).includes('screen');attention.textContent='Call '+(role==='collaborator'?'Brian’s':names[role]+'’s')+' attention';menu.dataset.target=role;}
- const dismiss=()=>{hide();dismissedUntil=performance.now()+1200;canvas.focus();};
- document.getElementById('avatar-actions-close').onclick=dismiss;
- attention.onclick=()=>{if(target&&isActive())onAction(target,'attention');dismiss();};
+ function usesClientButton(role){return getRole()==='client'&&role==='presenter';}
+ function show(role){
+  if(target!==role)brianMenuOpen=false;
+  target=role;
+  menu.hidden=role==='collaborator'?!brianMenuOpen:usesClientButton(role);
+  screen.hidden=!avatarActions(role,getRole()).includes('screen');
+  attentionLabel.textContent=role==='collaborator'?'Get Brian’s attention':'Get attention';
+  attention.setAttribute('aria-label','Get '+names[role]+'’s attention');
+ }
+ function dismiss(){hide();dismissedUntil=performance.now()+1200;canvas.focus();}
+ function requestAttention(role=target){
+  if(!role||role!==target||!isActive())return false;
+  onAction(role,'attention');dismiss();return true;
+ }
+ function closeBrianActions(){
+  if(!brianMenuOpen)return false;
+  brianMenuOpen=false;menu.hidden=true;return true;
+ }
+ function toggleBrianActions(){
+  if(target!=='collaborator'||!isActive())return;
+  if(closeBrianActions())return;
+  brianMenuOpen=true;menu.hidden=false;
+  (screen.disabled?attention:screen).focus();
+ }
+ function activateScreenShortcut(){
+  if(!brianMenuOpen||!isActive())return false;
+  if(!screen.disabled)screen.click();
+  return true;
+ }
+ function activateAttentionShortcut(){
+  if(target==='collaborator'&&!brianMenuOpen||attention.disabled)return false;
+  return requestAttention();
+ }
+ attention.onclick=()=>requestAttention();
  screen.addEventListener('click',dismiss);
- document.addEventListener('keydown',e=>{if(e.key==='Escape')dismiss();});
- canvas.addEventListener('keydown',e=>{if(isActive()&&e.key.toLowerCase()==='f'&&target&&!menu.hidden)attention.focus();});
- return {get target(){return menu.hidden?null:target;},update(now){
+ return {get target(){return target;},get brianMenuOpen(){return brianMenuOpen;},requestAttention,toggleBrianActions,closeBrianActions,activateScreenShortcut,activateAttentionShortcut,update(now){
   if(!isActive()||now<dismissedUntil){hide();return;}
   if(target&&(!people[target].visible||people[target].userData.ready===false)){hide();return;}
-  const held=!menu.hidden&&(menu.matches(':hover')||menu.contains(document.activeElement));
-  if(!held&&now-lastCheck>90){
-   lastCheck=now;pointer.set(0,0);camera.updateMatrixWorld();ray.setFromCamera(pointer,camera);
-   let nearest=null,distance=6;for(const [role,person] of Object.entries(people))if(role!==getRole()&&person.visible&&person.userData.ready!==false){
-    if(ray.ray.intersectBox(avatarTargetBounds(person,hitBox),hitPoint)){const d=camera.position.distanceTo(hitPoint);if(d<distance&&!occluded(hitPoint)){nearest=role;distance=d;}}
+  const held=target!=='collaborator'&&!menu.hidden&&(menu.matches(':hover')||menu.contains(document.activeElement));
+  if(held||now-lastCheck<90)return;
+  lastCheck=now;camera.updateMatrixWorld();ray.setFromCamera(pointer,camera);
+  let nearest=null,distance=6;
+  for(const [role,person] of Object.entries(people))if(role!==getRole()&&person.visible&&person.userData.ready!==false){
+   if(ray.ray.intersectBox(avatarTargetBounds(person,hitBox),hitPoint)){
+    const d=camera.position.distanceTo(hitPoint);
+    if(d<distance&&!occluded(hitPoint)){nearest=role;distance=d;}
    }
-   if(nearest)show(nearest,now);
   }
-  if(!held&&now-lastHit>650)hide();
-  if(target){anchor.copy(people[target].position);anchor.y+=people[target].userData.animation?.gesture==='seated'?1.4:1.95;anchor.project(camera);menu.style.left=Math.max(12,Math.min(innerWidth-250,(anchor.x+1)*innerWidth/2+12))+'px';menu.style.top=Math.max(85,Math.min(innerHeight-180,(-anchor.y+1)*innerHeight/2))+'px';}
+  if(nearest)show(nearest);else hide();
  },hide};
 }

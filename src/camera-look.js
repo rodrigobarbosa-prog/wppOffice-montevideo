@@ -12,7 +12,7 @@ export function followCameraAngles(camera,subject,yaw,pitch,dt){
 // Filter manual input, not the camera's absolute orientation: scripted arrival,
 // following and role changes remain authoritative and never fight an old target.
 // Exponential damping uses seconds, so response does not depend on refresh rate.
-export function createCameraLook({response=18,mouseSensitivity=.0022,touchSensitivity=.0026,maxSpeed=3.2,pitchLimit=1.35,maxPending=.55}={}){
+export function createCameraLook({response=20,mouseSensitivity=.0033,touchSensitivity=.0026,maxSpeed=3.2,pitchLimit=1.35,maxPending=.55}={}){
  let horizontal=0,vertical=0;
  function reset(){horizontal=vertical=0;}
  return {reset,
@@ -24,10 +24,13 @@ export function createCameraLook({response=18,mouseSensitivity=.0022,touchSensit
    vertical=clamp(vertical-dy*sensitivity,-maxPending,maxPending);
   },
   update(yaw,pitch,dt){
-   if(!Number.isFinite(dt)||dt<=0)return {yaw,pitch,changed:false};
+   if(!Number.isFinite(dt)||dt<=0||maxSpeed===0)return {yaw,pitch,changed:false};
    if(dt>.25){reset();return {yaw,pitch,changed:false};}
-   const blend=1-Math.exp(-response*dt),limit=maxSpeed*dt;
-   const dx=clamp(horizontal*blend,-limit,limit),dy=clamp(vertical*blend,-limit*.75,limit*.75);
+   // Spread a missed frame's rotation across the next few frames.
+   const step=Math.min(dt,1/30),blend=1-Math.exp(-response*step);
+   const yawLimit=maxSpeed*step,pitchSpeed=yawLimit*.75;
+   const dx=yawLimit*Math.tanh(horizontal*blend/yawLimit);
+   const dy=pitchSpeed*Math.tanh(vertical*blend/pitchSpeed);
    const nextPitch=clamp(pitch+dy,-pitchLimit,pitchLimit);
    horizontal-=dx;vertical=nextPitch!==pitch+dy?0:vertical-dy;
    if(Math.abs(horizontal)<1e-6)horizontal=0;

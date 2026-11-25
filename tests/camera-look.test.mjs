@@ -15,12 +15,12 @@ test('follow view centers the presenter horizontally and vertically without taki
 test('drag rotation arrives smoothly without overshoot or a long inertial tail',()=>{
  const look=createCameraLook();look.input(100,20);let yaw=0,pitch=0;
  for(let i=0;i<30;i++){
-  const next=look.update(yaw,pitch,1/60);assert.ok(next.yaw<=yaw&&next.yaw>=-.22);assert.ok(next.pitch<=pitch&&next.pitch>=-.044);
+  const next=look.update(yaw,pitch,1/60);assert.ok(next.yaw<=yaw&&next.yaw>=-.33);assert.ok(next.pitch<=pitch&&next.pitch>=-.066);
   if(i===0){assert.ok(Math.abs(next.yaw)<.06);assert.ok(Math.abs(next.yaw)>.02);}
-  if(i===10)assert.ok(Math.abs(next.yaw+.22)<.009,'95% of input settles within roughly 180 ms');
+  if(i===13)assert.ok(Math.abs(next.yaw+.33)<.009,'at least 95% of a 100px drag settles within 235 ms');
   yaw=next.yaw;pitch=next.pitch;
  }
- assert.ok(Math.abs(yaw+.22)<.0001);
+ assert.ok(Math.abs(yaw+.33)<.0001);
 });
 test('small mouse movements have the same response at 30, 60 and 144 Hz',()=>{
  const results=[30,60,144].map(fps=>{const look=createCameraLook();look.input(60,20);let pose={yaw:0,pitch:0};for(let i=0;i<fps/2;i++)pose=look.update(pose.yaw,pose.pitch,1/fps);return pose;});
@@ -41,4 +41,23 @@ test('pitch stops at the limit without storing a delayed reversal; scripts can r
 test('touch input is smooth, and invalid pointer deltas cannot corrupt the camera',()=>{
  const look=createCameraLook();look.input(50,0,'touch');let pose={yaw:0,pitch:0};for(let i=0;i<60;i++)pose=look.update(pose.yaw,pose.pitch,1/60);
  assert.ok(Math.abs(pose.yaw+.13)<.0001);look.input(NaN,20);look.input(20,Infinity);assert.ok(Number.isFinite(look.update(pose.yaw,pose.pitch,1/60).yaw));
+});
+
+test('a delayed frame does not dump pending drag into one camera jump',()=>{
+ const regular=createCameraLook(),delayed=createCameraLook();
+ for(const look of [regular,delayed])look.input(240,-180);
+ const reference=regular.update(0,0,1/30),first=delayed.update(0,0,.12);
+ assert.deepEqual(first,reference);
+ const next=delayed.update(first.yaw,first.pitch,1/60);
+ assert.ok(next.yaw<first.yaw&&next.pitch>first.pitch,'the rest of the drag survives the delay');
+ assert.ok(Math.abs(next.yaw-first.yaw)<=3.2/60);
+});
+test('the turn speed eases into its limit during a fast swipe',()=>{
+ const increments=[60,70,80].map(dx=>{
+  const look=createCameraLook();
+  look.input(dx,0);
+  return Math.abs(look.update(0,0,1/60).yaw);
+ });
+ assert.ok(increments[1]>increments[0]&&increments[2]>increments[1]);
+ assert.ok(increments[2]-increments[1]<increments[1]-increments[0]);
 });

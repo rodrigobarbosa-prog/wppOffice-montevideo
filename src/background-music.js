@@ -14,7 +14,7 @@ export function createBackgroundMusic({output,request=globalThis.fetch,onChange=
    if(active&&enabled&&buffer&&!source&&context?.state==='running'){
     source=context.createBufferSource();gain=context.createGain();gain.gain.value=0;source.buffer=buffer;source.loop=true;source.connect(gain).connect(context.destination);source.start();
    }
-   const target=active&&enabled?(conversation?.096:.52):0;
+   const target=active&&enabled?(conversation?.078:.42):0;
    if(gain&&target!==lastTarget){gain.gain.setTargetAtTime(target,context.currentTime,conversation?.18:.7);lastTarget=target;}
   },
   destroy(){destroyed=true;source?.stop();source?.disconnect();gain?.disconnect();source=null;gain=null;}

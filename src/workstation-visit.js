@@ -1,11 +1,19 @@
 import {createClientFollower,findFollowPath} from './client-follow.js';
 
-export function createWorkstationVisit({station,blocked,occluded}){
+export function isBesideWorkstation(station,visitor){
+ const dx=visitor.x-station.x,dz=visitor.z-station.z;
+ const forward=dx*Math.sin(station.yaw)+dz*Math.cos(station.yaw);
+ const lateral=dx*Math.cos(station.yaw)-dz*Math.sin(station.yaw);
+ return forward>=-1&&forward<=.1&&Math.abs(lateral)>=.30&&Math.hypot(dx,dz)<=1.65;
+}
+
+export function createWorkstationVisit({station,blocked,occluded,canViewFrom=()=>false}){
  const step=station.approachPoints?.length? .20 : undefined;
  const walker=createClientFollower({distance:.12,occluded,step});let phase='idle',goal=null;
  return {
   get phase(){return phase;},
   start(client){
+   if(canViewFrom(client)){goal=null;walker.reset();phase='viewing';return true;}
    const candidates=[];
    const points=station.approachPoints||[1.25,1.75].flatMap(distance=>[[1,0],[1,1],[1,-1],[0,1],[0,-1],[-1,0]].map(([dx,dz])=>{
     const length=Math.hypot(dx,dz);

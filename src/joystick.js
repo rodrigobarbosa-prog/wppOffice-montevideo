@@ -18,7 +18,7 @@ export function setupJoystick(element){
  window.addEventListener('blur',release);document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});
  return {update(keys,canMove){
   enabled=canMove;if(!enabled)release();const axes=enabled?movementAxes(keys,stick):{side:0,forward:0};
-  knob.style.transform=`translate(${axes.side*30}px,${-axes.forward*30}px)`;
+  knob.style.transform=`translate(${axes.side*80}%,${-axes.forward*80}%)`;
   element.dataset.side=axes.side.toFixed(3);element.dataset.forward=axes.forward.toFixed(3);element.setAttribute('aria-disabled',String(!enabled));
   return axes;
  },reset:release};

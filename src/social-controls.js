@@ -4,7 +4,7 @@ export function setupSocialControls({scene,camera,people,getRole,isActive,onGest
  const panel=document.createElement('div');panel.className='social-controls';panel.setAttribute('aria-label','Avatar gestures');panel.hidden=true;
  const hint=document.createElement('p');hint.className='social-hint';hint.hidden=true;
  const buttons={};for(const [kind,label,title] of [['thumbsUp','👍 Agree','Thumbs up'],['point','☝ Point','Choose a point to indicate'],['no','No','Shake your head: no']]){const button=document.createElement('button');button.textContent=label;button.title=title;button.setAttribute('aria-label',title);button.dataset.gesture=kind;panel.append(button);buttons[kind]=button;}
- panel.append(hint);document.getElementById('tour-ui').append(panel);
+ panel.append(hint);document.getElementById('visit-action-dock').append(panel);
  const ray=new THREE.Raycaster(),center=new THREE.Vector2(0,0),markers=new Map(),markerGroup=new THREE.Group();scene.add(markerGroup);let choosing=false;
  const geometry=new THREE.SphereGeometry(.065,12,8);
  function cancel(){choosing=false;hint.hidden=true;buttons.point.textContent='☝ Point';buttons.point.setAttribute('aria-pressed','false');}

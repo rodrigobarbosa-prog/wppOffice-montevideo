@@ -60,5 +60,5 @@ const station={
  yaw:chairYawForSide(collaboratorSide)+collaboratorDesk.rotation
 };
 const halfModule=collaboratorDesk.length/collaboratorDesk.seats/2;
-// Use the gaps between neighboring chairs on either side of the bench.
-export const collaboratorStation={...station,approachPoints:[-.61,2.22].flatMap(offset=>[-halfModule,halfModule].map(gap=>({x:station.x-offset*collaboratorSide,z:station.z+gap})))};
+// Stop in either gap beside Brian's chair, on the same side of the bench.
+export const collaboratorStation={...station,approachPoints:[-halfModule,halfModule].map(gap=>({x:station.x+.61*collaboratorSide,z:station.z+gap}))};

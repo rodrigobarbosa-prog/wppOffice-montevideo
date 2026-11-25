@@ -8,10 +8,10 @@ test('lounge starts only inside the visit, loops quietly, ducks and mutes withou
  const music=createBackgroundMusic({output:{getContext:()=>context,decode:async()=>({duration:27})},request:async()=>{requests++;return {ok:true,arrayBuffer:async()=>new ArrayBuffer(4)};}});
  music.update({playing:false});assert.equal(requests,0);
  music.update({playing:true});await new Promise(resolve=>setTimeout(resolve,0));music.update({playing:true});
- assert.equal(requests,1);assert.equal(sources.length,1);assert.equal(sources[0].loop,true);assert.equal(targets.at(-1).value,.52);
- music.update({playing:true,conversation:true});assert.equal(targets.at(-1).value,.096);
+ assert.equal(requests,1);assert.equal(sources.length,1);assert.equal(sources[0].loop,true);assert.equal(targets.at(-1).value,.42);
+ music.update({playing:true,conversation:true});assert.equal(targets.at(-1).value,.078);
  music.setEnabled(false);music.update({playing:true});assert.equal(targets.at(-1).value,0);
- music.setEnabled(true);music.update({playing:true});assert.equal(targets.at(-1).value,.52);assert.equal(sources.length,1);
+ music.setEnabled(true);music.update({playing:true});assert.equal(targets.at(-1).value,.42);assert.equal(sources.length,1);
  music.update({playing:false});assert.equal(targets.at(-1).value,0);music.destroy();assert.ok(sources[0].stopped);
 });
 

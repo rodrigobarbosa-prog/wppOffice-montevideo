@@ -22,14 +22,14 @@ import {createArrivalIntro,liftArrival,liftSeparates} from './arrival-intro.js';
 import {createArrivalVoice} from './arrival-voice.js';
 import {createArrivalSound} from './arrival-sound.js';
 import {createLoadingProgress} from './loading-progress.js';
-import {setupAvatarInteractions,thirdPersonPosition} from './avatar-interactions.js';
+import {primaryVisitAction,setupAvatarInteractions,thirdPersonPosition} from './avatar-interactions.js';
 import {buildRouteWorld} from './route-world.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createVisuals} from './visuals.js';
 import {createPresenterAvatar} from './presenter-avatar.js';
 import {createClientAvatar} from './client-avatar.js';
 import {createCollaboratorAvatar} from './collaborator-avatar.js';
-import {createWorkstationVisit} from './workstation-visit.js';
+import {createWorkstationVisit,isBesideWorkstation} from './workstation-visit.js';
 import {createClientFollower} from './client-follow.js';
 import {setupVisitControls} from './visit-controls.js';
 import {createWorkstationDisplay} from './workstation-display.js';
@@ -225,7 +225,9 @@ try{
   const policy=narrationPolicy(role);
   for(const id of ['voice-toggle','narration-language','narration-voice','voice-volume','voice-replay']){const control=$(id);control.hidden=!policy.audio||['narration-language','narration-voice'].includes(id);const label=document.querySelector('label[for="'+id+'"]');if(label)label.hidden=control.hidden;}
   $('captions-toggle').hidden=!policy.captions;updateCaptions();
-  $('view-label').textContent={client:'Client view',presenter:'Presenter view',collaborator:'Collaborator view'}[role];
+  const viewLabel=$('view-label');
+  viewLabel.hidden=role==='client';
+  if(!viewLabel.hidden)viewLabel.textContent=role==='presenter'?'Presenter view':'Collaborator view';
   if(roleSwitch)roleSwitch.innerHTML='<small>DEV</small> Switch to '+(role==='client'?'Presenter':'Client');
   if(roleSelect)roleSelect.value=role;
   const visible=avatarVisibility(role,presenterAvailable);
@@ -270,15 +272,37 @@ try{
  }
  updateRole();
  let socialControls;
- const workstationVisit=createWorkstationVisit({station:collaboratorStation,occluded:createWalkOcclusion(world.office.solids,radius,eyeHeight),blocked:(x,z)=>blocked(x,z)||[presenterAvatar,collaboratorAvatar].some(a=>a.visible&&Math.hypot(x-a.position.x,z-a.position.z)<.70)});
+ const workstationVisit=createWorkstationVisit({
+  station:collaboratorStation,
+  occluded:createWalkOcclusion(world.office.solids,radius,eyeHeight),
+  blocked:(x,z)=>{
+   const point={x,z};
+   return blocked(x,z)||avatarStepBlocked(point,point,[presenterAvatar,collaboratorAvatar],clientAvatar);
+  },
+  canViewFrom:client=>{
+   const {x,z}=collaboratorStation;
+   if(!isBesideWorkstation(collaboratorStation,client))return false;
+   return !segmentOccluded({x:client.x,y:camera.position.y,z:client.z},{x,y:1.3,z},world.office.solids);
+  }
+ });
  const workstationDisplay=createWorkstationDisplay(scene,{lightEnabled:!renderProfile.mobile});
- visitControls=setupVisitControls({workstationDisplay,onScreenVisit:begin=>{if(begin&&!workstationVisit.start(clientAvatar.position))return false;if(!begin)workstationVisit.cancel();narrator.setPaused(begin||!hasStarted||!hostPlaying);following=!begin;follower.reset();updateRole();return true;},onExplore:explore=>{following=!explore;follower.reset();updateRole();},onAttention:(target,from)=>{
+ visitControls=setupVisitControls({workstationDisplay,onScreenVisit:begin=>{if(begin&&!workstationVisit.start(clientAvatar.position))return false;if(!begin)workstationVisit.cancel();narrator.setPaused(begin||!hasStarted||!hostPlaying);following=!begin;follower.reset();updateRole();return begin?workstationVisit.phase:true;},onExplore:explore=>{following=!explore;follower.reset();updateRole();},onAttention:(target,from,kind)=>{
+  if(kind==='screen')return;
   const item=attentionRings.find(a=>a.avatar===people[target]);if(item)item.until=performance.now()+6000;
   const actor=people[from];if(actor){actor.userData.actionUntil=performance.now()+3200;actor.userData.actionTarget=target;const signal=attentionRings.find(a=>a.avatar===actor);if(signal)signal.until=performance.now()+3200;}
   people[target].userData.attentionFrom=from;people[target].userData.attentionUntil=performance.now()+6000;
  },onGesture:(kind,point,from)=>socialControls?.play(kind,point,from)});
- const avatarInteractions=setupAvatarInteractions({canvas,camera,people,solids:world.office.solids,getRole:()=>role,isActive:()=>!isolatedReview&&!socialControls?.aiming&&$('welcome').hidden&&$('screen-panel').hidden&&!(role==='client'&&!previewOffice&&arrivalDoor<.999),isDragging:()=>dragging,extraOcclusion:(from,to)=>liftSeparates(from,to,arrivalDoor),onAction:(target,kind)=>{if(role==='client'&&!previewOffice&&arrivalDoor<.999)return;visitControls.interact(target,kind);}});
- const seatInteractions=setupSeatInteractions({canvas,camera,seats:world.seats,isActive:()=>!socialControls?.aiming&&!avatarInteractions.target&&$('welcome').hidden&&$('screen-panel').hidden&&!(role==='client'&&(!previewOffice&&arrivalIntro.active||workstationVisit.phase!=='idle')),solids:world.office.solids,extraOcclusion:(from,to)=>liftSeparates(from,to,arrivalDoor),getMotion:()=>seatMotions[role],getPosition:()=>people[role].position,onSit:seat=>{if(seatMotions[role].sit(seat,people[role].position)){people[role].userData.seatId=seat.id;keys.clear();}},onStand:()=>{if(seatMotions[role].stand())keys.clear();}});
+ const avatarInteractions=setupAvatarInteractions({canvas,camera,people,solids:world.office.solids,getRole:()=>role,isActive:()=>!isolatedReview&&!socialControls?.aiming&&$('welcome').hidden&&$('screen-panel').hidden&&!(role==='client'&&!previewOffice&&arrivalDoor<.999),extraOcclusion:(from,to)=>liftSeparates(from,to,arrivalDoor),onAction:(target,kind)=>{if(role==='client'&&!previewOffice&&arrivalDoor<.999)return;visitControls.interact(target,kind);}});
+ const primaryAction=$('follow-toggle'),primaryActionLabel=$('visit-action-label'),primaryActionKey=$('visit-action-key');
+ let currentAction=null,brianExpanded=false;
+ primaryAction.onclick=()=>{
+  if(currentAction?.kind==='brian'){avatarInteractions.toggleBrianActions();return;}
+  if(currentAction?.kind==='attention')avatarInteractions.requestAttention('presenter');
+  else if(currentAction?.kind==='seat')seatInteractions.use();
+  else if(currentAction)visitControls.toggleFollowing();
+  canvas.focus();
+ };
+ const seatInteractions=setupSeatInteractions({camera,seats:world.seats,isActive:()=>!socialControls?.aiming&&(!avatarInteractions.target||seatMotions[role].active)&&$('welcome').hidden&&$('screen-panel').hidden&&!(role==='client'&&(!previewOffice&&arrivalIntro.active||workstationVisit.phase!=='idle')),solids:world.office.solids,extraOcclusion:(from,to)=>liftSeparates(from,to,arrivalDoor),getMotion:()=>seatMotions[role],getPosition:()=>people[role].position,onSit:seat=>{if(seatMotions[role].sit(seat,people[role].position)){people[role].userData.seatId=seat.id;keys.clear();}},onStand:()=>{if(seatMotions[role].stand())keys.clear();}});
  socialControls=setupSocialControls({scene,camera,people,getRole:()=>role,isActive:()=>$('welcome').hidden&&$('screen-panel').hidden&&!(role==='client'&&!previewOffice&&arrivalDoor<.999),onGesture:(kind,point)=>visitControls.gesture(kind,point)});
  visitControls.setRole(role);
  if(isolatedReview)visitControls.setFollowing(false);
@@ -323,7 +347,7 @@ try{
   $('guide-toggle').hidden=mode!=='pause';
   if(mode==='guide'){
    $('dialog-step').textContent=role.toUpperCase()+' VIEW';$('welcome-title').textContent='Make yourself comfortable.';
-   $('dialog-copy').textContent=role==='client'?'You follow the presenter automatically. Choose Explore office to walk freely, or Follow presenter to rejoin.':'Drag to look. Use People & communication for your microphone, attention requests and Brian’s screen. Brian works at a desk in the west wing.';
+   $('dialog-copy').textContent=role==='client'?'You follow the presenter automatically. Aim away from the presenter to find Explore office, or choose Follow presenter to rejoin.':'Drag to look. Use People & communication for your microphone, attention requests and Brian’s screen. Brian works at a desk in the west wing.';
    enter.textContent='Back to visit';
   }else if(mode==='pause'){
    $('dialog-step').textContent='TAKE YOUR TIME';$('welcome-title').textContent='Visit paused.';
@@ -347,7 +371,8 @@ try{
  };
  $('arrival-audio-retry').onclick=()=>{void visitAudioOutput.unlock().then(()=>arrivalAudio?.retry());canvas.focus();};
  $('pause').onclick=pause;$('help').onclick=()=>showDialog('guide');$('guide-toggle').onclick=()=>showDialog('guide');
- function useDoor(){if(socialControls.confirm())return;if(seatInteractions.use())return;if(role==='client'&&!previewOffice&&arrivalDoor<.999)return;if(connectedVisit&&role!=='presenter')return;if($('welcome').hidden&&aimedDoor)world.entryDoor.toggle();}
+ function useDoor(){if(role==='client'&&!previewOffice&&arrivalDoor<.999)return;if(connectedVisit&&role!=='presenter')return;if($('welcome').hidden&&aimedDoor)world.entryDoor.toggle();}
+ const doorActionLabel=$('door-action-label');
  $('door-action').onclick=()=>{useDoor();canvas.focus();};
  $('host-demo').onclick=()=>{hostPlaying=!hostPlaying;$('host-demo').textContent=hostPlaying?'Pause host':'Resume host';narrator.setPaused(!hostPlaying);if(arrivalAudio&&arrivalIntro.active){if(!hostPlaying)arrivalAudio.pause();else if(hasStarted&&!arrivalAudio.state().finished)void arrivalAudio.play();}canvas.focus();};
  if(roleSwitch)roleSwitch.onclick=()=>{
@@ -356,8 +381,15 @@ try{
  };
  if(roleSelect)roleSelect.onchange=e=>{switchRole(e.target.value);};
  $('welcome').addEventListener('keydown',e=>{if(e.key!=='Tab')return;const focusable=[...$('welcome').querySelectorAll('button:not(:disabled)')].filter(b=>!b.hidden);const first=focusable[0],last=focusable.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}});
- document.addEventListener('keydown',e=>{if(e.code==='Escape'){if(visitControls.screenPhase()!=='idle'||!$('screen-panel').hidden){$('screen-close').click();return;}if($('settings').open){$('settings').open=false;return;}pause();}});
- document.addEventListener('keydown',e=>{if(e.code==='KeyE'&&!e.repeat&&acceptsMovementKey(e)){e.preventDefault();useDoor();}});
+ document.addEventListener('keydown',e=>{if(e.code==='Escape'){if(avatarInteractions.closeBrianActions()){primaryAction.focus();return;}if(visitControls.screenPhase()!=='idle'||!$('screen-panel').hidden){$('screen-close').click();return;}if($('settings').open){$('settings').open=false;return;}pause();}});
+ document.addEventListener('keydown',e=>{
+  if((e.code!=='KeyE'&&e.code!=='KeyF')||e.repeat||!acceptsMovementKey(e)||!$('welcome').hidden||!$('screen-panel').hidden||e.target?.closest?.('.user-panel'))return;
+  if(e.code==='KeyF'){if(avatarInteractions.activateAttentionShortcut())e.preventDefault();return;}
+  e.preventDefault();
+  if(socialControls.confirm()||avatarInteractions.activateScreenShortcut())return;
+  if(aimedDoor){useDoor();return;}
+  if(!primaryAction.hidden&&!primaryAction.disabled)primaryAction.click();
+ });
  const movementKeyboard=setupMovementKeyboard({target:window,keys,enabled:()=>$('welcome').hidden&&$('screen-panel').hidden,focus:()=>canvas.focus({preventScroll:true}),onRelease:()=>{joystick.reset();stopLooking();}});
  canvas.style.touchAction='none';
  canvas.addEventListener('pointerdown',e=>{
@@ -378,6 +410,31 @@ try{
  $('quality').title='Switch image quality';
  $('quality').onclick=()=>{high=visuals.quality(!high);$('quality').textContent=high?'Image: detail':'Image: smooth';};
  window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);visuals.resize();});
+ const locationLabel=$('location'),reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+ let locationName=null,nextLocation=locationLabel.textContent,changingLocation=false;
+ async function fadeLocation(){
+  changingLocation=true;
+  try{
+   while(locationLabel.textContent!==nextLocation){
+    if(reducedMotion.matches){locationLabel.textContent=nextLocation;break;}
+    const fadeOut=locationLabel.animate([{opacity:1},{opacity:0}],{duration:130,easing:'ease-in',fill:'forwards'});
+    await fadeOut.finished;
+    locationLabel.textContent=nextLocation;
+    fadeOut.cancel();
+    await locationLabel.animate([{opacity:0},{opacity:1}],{duration:180,easing:'ease-out'}).finished;
+   }
+  }finally{changingLocation=false;}
+ }
+ function updateLocation(name){
+  if(locationName===name)return;
+  const firstLocation=locationName===null;
+  locationName=name;
+  nextLocation=name.replace('Hall de ascensores','Arrival').replace('Piso 14','Floor 14')
+   .replace('Fondo del pasillo 2','Office · West wing').replace('Pasillo 1','Office · East wing').replace('Pasillo 2','Office · West wing')
+   .replace('Sala ','Meeting room ').replace('Cocina','Kitchen').replace('Acceso','Entrance');
+  if(firstLocation)locationLabel.textContent=nextLocation;
+  else if(!changingLocation)void fadeLocation();
+ }
  let previous=performance.now(),lastPublish=0;
  const renderTimes=[],shadowRefresh=createShadowRefresh(),poseRate=createPoseRate();renderer.info.autoReset=false;
  renderer.setAnimationLoop(now=>{
@@ -386,6 +443,7 @@ try{
   const active=$('welcome').hidden;
   backgroundMusic.update({playing:hasStarted&&active&&!document.hidden,conversation:speechState.speaking||arrivalAudio?.state().playing||visitControls.state().conversation});
   socialControls.update(now);
+  const yawBeforeLook=yaw;
   if(active&&$('screen-panel').hidden){const look=cameraLook.update(yaw,pitch,dragging?dt:elapsed);if(look.changed){yaw=look.yaw;pitch=look.pitch;camera.rotation.set(pitch,yaw,0);}}else cameraLook.reset();
   const remotePresenter=visitControls.remotePose('presenter'),remoteClient=visitControls.remotePose('client'),remoteCollaborator=visitControls.remotePose('collaborator');
   const presenterSeat=remotePresenter?remotePresenter.seat?.id:seatMotions.presenter.state?.phase!=='standing'?seatMotions.presenter.state?.seat.id:null;
@@ -394,7 +452,7 @@ try{
   const {waiting:presenterWaiting,lockMovement:presenterMovementLocked}=presenterWaitState({role,connected:connectedVisit,client:remoteClient});
   narrator.setPaused(!active||!hostPlaying||visitingBrian||introRunning);
   $('screen-open').disabled=role==='client'&&!previewOffice&&arrivalDoor<.999;$('avatar-attention').disabled=$('screen-open').disabled;
-  $('camera-view').disabled=introRunning;$('follow-toggle').hidden=role!=='client'||introRunning;
+  $('camera-view').disabled=introRunning;
   $('walk-controls').hidden=introRunning||seatMotions[role].active||role==='client'&&(following||visitingBrian);
   document.body.dataset.arriving=String(active&&introRunning);$('arrival-title').hidden=!(active&&introRunning);$('arrival-title').classList.toggle('is-departing',arrivalDoor>.02);document.body.classList.toggle('arrival-reveal',active&&introRunning&&arrivalDoor>.02);
   let arrivalCue=null;
@@ -424,7 +482,7 @@ try{
   if(active&&(!connectedVisit||role==='presenter')&&world.entryDoor.update(dt,occupants))renderer.shadowMap.needsUpdate=true;
   const doorNear=active&&!seatMotions[role].active&&(!connectedVisit||role==='presenter')&&world.entryDoor.canInteract(camera.position.x,camera.position.z,yaw);
   $('door-action').hidden=!doorNear;
-  $('door-action').textContent=world.entryDoor.obstructed?'Move back · E to reopen':world.entryDoor.targetOpen?'E · Close door':'E · Open door';
+  doorActionLabel.textContent=world.entryDoor.obstructed?'Move back · Reopen':world.entryDoor.targetOpen?'Close door':'Open door';
   canvas.dataset.doorAngle=world.entryDoor.angle.toFixed(3);
   canvas.dataset.doorTarget=world.entryDoor.targetOpen?'open':'closed';
   canvas.dataset.doorObstructed=String(world.entryDoor.obstructed);
@@ -434,9 +492,10 @@ try{
   if(active&&!pointing[role]&&!introRunning&&!seatMotions[role].active&&(role==='presenter'&&!presenterMovementLocked||role==='collaborator'||role==='client'&&!following&&!visitingBrian&&!(clientAvatar.userData.actionUntil>now))){
    const startX=camera.position.x,startZ=camera.position.z;
    const {forward,side}=movement,step=1.8*dt;
-   const dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*step,dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*step;
+   const walkYaw=(yawBeforeLook+yaw)/2,sin=Math.sin(walkYaw),cos=Math.cos(walkYaw);
+   const dx=(-sin*forward+cos*side)*step,dz=(-cos*forward-sin*side)*step;
    // Small independent steps let the presenter slide along furniture and walls.
-   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.035));
+   const steps=Math.ceil(Math.hypot(dx,dz)/.035);
    const cameraBlocked=(x,z)=>blocked(x,z)||avatarStepBlocked(camera.position,{x,z},Object.values(people),people[role]);
    for(let i=0;i<steps;i++){if(!cameraBlocked(camera.position.x+dx/steps,camera.position.z))camera.position.x+=dx/steps;if(!cameraBlocked(camera.position.x,camera.position.z+dz/steps))camera.position.z+=dz/steps;}
    if(role==='presenter'){presenterSpeed=Math.hypot(camera.position.x-startX,camera.position.z-startZ)/Math.max(dt,.001);presenterAvatar.position.set(camera.position.x,0,camera.position.z);if(presenterSpeed>.025)presenterDirection=Math.atan2(camera.position.x-startX,camera.position.z-startZ);}
@@ -468,8 +527,16 @@ try{
    if(workstationVisit.phase==='approaching'&&!pointing.client&&!(clientAvatar.userData.actionUntil>now)){
     const pose=workstationVisit.update(dt,clientAvatar.position);clientSpeed=pose.speed;clientAvatar.position.set(pose.x,0,pose.z);camera.position.set(pose.x,eyeHeight,pose.z);
     if(pose.speed>.01)clientAvatar.userData.face(pose.direction);
-    if(!dragging){const target=pose.arrived?Math.atan2(pose.x-collaboratorStation.x,pose.z-collaboratorStation.z):pose.speed>.01?pose.direction-Math.PI:yaw;yaw+=Math.atan2(Math.sin(target-yaw),Math.cos(target-yaw))*(1-Math.exp(-dt*4));camera.rotation.set(pitch,yaw,0);}
-    if(pose.arrived){clientAvatar.userData.face(Math.atan2(collaboratorStation.x-pose.x,collaboratorStation.z-pose.z));visitControls.arriveScreen();}
+    if(!pose.arrived&&!dragging&&pose.speed>.01){const target=pose.direction-Math.PI;yaw+=Math.atan2(Math.sin(target-yaw),Math.cos(target-yaw))*(1-Math.exp(-dt*4));camera.rotation.set(pitch,yaw,0);}
+    if(pose.arrived)visitControls.arriveScreen();
+   }
+   if(workstationVisit.phase==='viewing'&&workstationDisplay.screenPosition){
+    const monitor=workstationDisplay.screenPosition;
+    clientDirection=headingToward(clientAvatar.position,monitor);
+    if(!dragging){
+     ({yaw,pitch}=followCameraAngles(camera.position,monitor,yaw,pitch,dt));
+     camera.rotation.set(pitch,yaw,0);
+    }
    }
   }
   const controlsClient=(!connectedVisit||role==='client'&&remotePresenter)&&!(role!=='client'&&remoteClient);
@@ -528,8 +595,7 @@ try{
   if(active&&shadowRefresh.update(now,Object.values(people)))renderer.shadowMap.needsUpdate=true;
   if(canvas.dataset.avatarVisible!==String(presenterAvatar.visible))renderer.shadowMap.needsUpdate=true;
   canvas.dataset.look=[yaw,pitch].map(v=>v.toFixed(3)).join(',');
-  const locationName=world.locationAt(role==='client'&&presenterAvatar.visible?presenterAvatar.position.x:camera.position.x,role==='client'&&presenterAvatar.visible?presenterAvatar.position.z:camera.position.z);
-  $('location').textContent=locationName.replace('Hall de ascensores','Arrival').replace('Piso 14','Floor 14').replace('Fondo del pasillo 2','Office · West wing').replace('Pasillo 1','Office · East wing').replace('Pasillo 2','Office · West wing').replace('Sala ','Meeting room ').replace('Cocina','Kitchen').replace('Acceso','Entrance');
+  updateLocation(world.locationAt(camera.position.x,camera.position.z));
   canvas.dataset.avatarVisible=String(presenterAvatar.visible);
   canvas.dataset.presenterPosition=[presenterAvatar.position.x,presenterAvatar.position.z].map(v=>v.toFixed(3)).join(',');
   canvas.dataset.hostAnimation=presenterAvatar.userData.animation?.speed>.02?'walking':presenterAvatar.userData.animation?.gesture||'idle';
@@ -540,6 +606,27 @@ try{
   for(const [person,avatar] of Object.entries(people))avatar.userData.mirrorSelf=person===role&&cameraView==='first';
   if(cameraView==='third'&&!introRunning){const view=thirdPersonPosition(self.position,yaw,(x,z)=>blocked(x,z,self.userData.seatId)),target=new THREE.Vector3(view.x,view.y,view.z);if(!thirdPersonCamera)thirdPersonCamera=target.clone();else{const next=thirdPersonCamera.clone().lerp(target,1-Math.exp(-dt*6));thirdPersonCamera.copy(blocked(next.x,next.z,self.userData.seatId)?target:next);}camera.position.copy(thirdPersonCamera);if(presenterFocus)camera.lookAt(presenterFocus.x,presenterFocus.y,presenterFocus.z);else camera.lookAt(self.position.x,1.2,self.position.z);self.visible=Math.hypot(camera.position.x-self.position.x,camera.position.z-self.position.z)>.65;}else thirdPersonCamera=null;
   camera.updateMatrixWorld();avatarInteractions.update(now);seatInteractions.update();aimedDoor=doorNear&&!avatarInteractions.target&&!seatInteractions.target&&world.entryDoor.aimedAt(camera);$('door-action').hidden=!aimedDoor;$('crosshair').classList.toggle('has-action',Boolean(avatarInteractions.target||seatInteractions.target||aimedDoor));canvas.dataset.actionTarget=avatarInteractions.target||seatInteractions.target?.id||'';canvas.dataset.cameraView=cameraView;canvas.dataset.clientGesture=clientAvatar.userData.animation?.gesture||'idle';
+  const action=active&&!introRunning&&$('screen-panel').hidden&&!visitingBrian&&!aimedDoor
+   ?primaryVisitAction({seatAction:seatInteractions.action,target:avatarInteractions.target,role,following}):null;
+  const expanded=action?.kind==='brian'&&avatarInteractions.brianMenuOpen;
+  if(action!==currentAction||expanded!==brianExpanded){
+   currentAction=action;brianExpanded=expanded;
+   primaryAction.hidden=!action;
+   primaryAction.disabled=Boolean(action?.disabled);
+   if(action){
+    primaryActionLabel.textContent=expanded?'Close Brian’s actions':action.label;
+    primaryActionKey.textContent=expanded?'Esc':'E';
+    primaryAction.setAttribute('aria-keyshortcuts',expanded?'Escape':'E');
+    primaryAction.dataset.action=action.kind;
+   }
+   if(action?.kind==='brian'){
+    primaryAction.setAttribute('aria-controls','avatar-actions');
+    primaryAction.setAttribute('aria-expanded',String(expanded));
+   }else{
+    primaryAction.removeAttribute('aria-controls');
+    primaryAction.removeAttribute('aria-expanded');
+   }
+  }
   visuals.observeFrame?.(elapsed,active);renderer.info.reset();const renderStart=performance.now();visuals.render(dt);
   camera.position.copy(savedCameraPosition);camera.quaternion.copy(savedCameraQuaternion);camera.updateMatrixWorld();self.visible=selfVisible;
   renderTimes.push(performance.now()-renderStart);if(renderTimes.length>60)renderTimes.shift();
