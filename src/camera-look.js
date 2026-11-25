@@ -16,6 +16,7 @@ export function createCameraLook({response=20,mouseSensitivity=.0033,touchSensit
  let horizontal=0,vertical=0;
  function reset(){horizontal=vertical=0;}
  return {reset,
+  get settling(){return Math.abs(horizontal)>.004||Math.abs(vertical)>.004;},
   input(dx,dy,pointerType='mouse'){
    if(!Number.isFinite(dx)||!Number.isFinite(dy))return;
    const sensitivity=pointerType==='touch'?touchSensitivity:mouseSensitivity;

@@ -193,7 +193,7 @@ try{
  if(previewOffice)narrator.setEnabled(false);
  function updateCaptions(){const state=narrator.state();$('narration-panel').hidden=!narrationPolicy(role).captions||!captionsVisible||!state.text;$('captions-toggle').textContent=captionsVisible?'Disable subtitles':'Enable subtitles';$('captions-toggle').setAttribute('aria-pressed',String(captionsVisible));document.body.classList.toggle('has-captions',narrationPolicy(role).captions&&captionsVisible&&Boolean(state.text));}
  const motionLook=createMotionLook(),motionButton=$('motion-look');
- let motionEnabled=false,motionTimer=null;
+ let motionEnabled=false,motionTimer=null,touchLookPriority=false;
  function stopMotion(label='Motion controls: off'){
   motionEnabled=false;
   clearTimeout(motionTimer);motionTimer=null;
@@ -435,6 +435,8 @@ try{
  canvas.addEventListener('pointerdown',e=>{
   if(!$('welcome').hidden||e.button!==0||lookPointer!==null)return;
   cameraLook.reset();
+  touchLookPriority=e.pointerType==='touch';
+  if(touchLookPriority)motionLook.rebase();
   e.preventDefault();canvas.focus({preventScroll:true});dragging=true;lookPointer=e.pointerId;lastLookX=e.clientX;lastLookY=e.clientY;
   canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';
  });
@@ -489,7 +491,8 @@ try{
   const presenterSeat=remotePresenter?remotePresenter.seat?.id:seatMotions.presenter.state?.phase!=='standing'?seatMotions.presenter.state?.seat.id:null;
   const introRunning=role==='client'&&!previewOffice&&arrivalIntro.active;
   const visitingBrian=role==='client'&&workstationVisit.phase!=='idle';
-  const motion=motionLook.update(yaw,pitch,elapsed,motionEnabled&&active&&!document.hidden&&cameraView==='first'&&!introRunning&&!visitingBrian&&$('screen-panel').hidden&&!motionButton.closest('details').open);
+  touchLookPriority=touchLookPriority&&(dragging||cameraLook.settling);
+  const motion=motionLook.update(yaw,pitch,elapsed,motionEnabled&&!touchLookPriority&&active&&!document.hidden&&cameraView==='first'&&!introRunning&&!visitingBrian&&$('screen-panel').hidden&&!motionButton.closest('details').open);
   if(motion.changed){yaw=motion.yaw;pitch=motion.pitch;camera.rotation.set(pitch,yaw,0);}
   const {waiting:presenterWaiting,lockMovement:presenterMovementLocked}=presenterWaitState({role,connected:connectedVisit,client:remoteClient});
   narrator.setPaused(!active||!hostPlaying||visitingBrian||introRunning);
@@ -617,7 +620,7 @@ try{
    collaboratorAvatar.userData.animate(dt,{speed:collaboratorSpeed,lookAt:collaboratorAvatar.userData.attentionUntil>now?people[collaboratorAvatar.userData.attentionFrom]?.position:null,now});
    canvas.dataset.presenterSpeaking=String(Boolean(presenterPose.speaking));canvas.dataset.presenterGesture=presenterAvatar.userData.animation?.gesture||'idle';
   }
-  const trackPresenter=active&&role==='client'&&following&&presenterAvatar.visible&&!introRunning&&!visitingBrian&&!pointing.client&&!dragging&&!motion.active&&now-lastManualLook>1200;
+  const trackPresenter=active&&role==='client'&&following&&presenterAvatar.visible&&!introRunning&&!visitingBrian&&!pointing.client&&!dragging&&!touchLookPriority&&!motion.active&&now-lastManualLook>1200;
   const presenterFocus=trackPresenter?{x:presenterAvatar.position.x,y:presenterAvatar.position.y+1.32-.48*(presenterAvatar.userData.seated||0),z:presenterAvatar.position.z}:null;
   if(presenterFocus){
    ({yaw,pitch}=followCameraAngles(camera.position,presenterFocus,yaw,pitch,dt));

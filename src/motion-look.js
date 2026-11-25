@@ -21,6 +21,7 @@ export function createMotionLook(){
    if(!direction)return false;
    sample=direction;return true;
   },
+  rebase,
   reset(){sample=null;rebase();},
   update(yaw,pitch,dt,enabled){
    const active=Boolean(enabled&&sample);
