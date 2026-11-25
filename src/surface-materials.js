@@ -34,9 +34,11 @@ export function createArrivalFinishes({steel,wood,tile}){
  const veneer=wood.clone();veneer.color.set('#e2cfc2');veneer.roughness=.67;veneer.clearcoat=.31;
  const enamel=tile.clone();enamel.color.set('#efefeb');enamel.roughness=.8;enamel.clearcoat=.19;
  const chrome=new THREE.MeshStandardMaterial({color:'#c6c9c7',metalness:.92,roughness:.24});
+ const hallMirror=new THREE.MeshStandardMaterial({name:'Hall mirror finish',color:'#dde4e4',metalness:1,roughness:.16,envMapIntensity:.85});
  const diffuser=new THREE.MeshStandardMaterial({color:'#fff4db',emissive:'#ffe9c4',emissiveIntensity:1.65,roughness:.46});
- return {porcelain,border,cabinFloor,brushed,polished,veneer,enamel,chrome,diffuser,
+ return {porcelain,border,cabinFloor,brushed,polished,veneer,enamel,chrome,hallMirror,diffuser,
   setEnvironment(texture){
+   hallMirror.envMap=texture;hallMirror.needsUpdate=true;
    for(const metal of [brushed,polished,chrome]){
     metal.envMap=texture;metal.envMapIntensity=.75;metal.needsUpdate=true;
    }

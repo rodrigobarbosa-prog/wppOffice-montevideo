@@ -24,7 +24,7 @@ test('arrival mirrors skip reflection passes through the office wall',()=>{
  mirror.onBeforeRender(renderer,scene,camera);
  assert.equal(draws,1);
 });
-test('hall reflection camera selects arrival objects and keeps those objects visible in the main view',()=>{
+test('cabin reflection camera selects arrival objects and keeps those objects visible in the main view',()=>{
  const layers=()=>({mask:1,enable(channel){this.mask|=1<<channel;},set(channel){this.mask=1<<channel;}});
  const mesh={layers:layers()},office={layers:layers()};
  const root={layers:layers(),traverse(visit){visit(this);visit(mesh);}};

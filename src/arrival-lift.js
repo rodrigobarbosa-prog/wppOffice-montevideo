@@ -37,7 +37,7 @@ export function buildArrivalLift(scene,{brushed,polished,chrome,cabinFloor,diffu
  function mirror(w,h,x,y,z,rotation){
   const object=new Reflector(new THREE.PlaneGeometry(w,h),{color:0xe4e9e7,textureWidth:renderProfile.mirrorWidth,textureHeight:renderProfile.mirrorHeight,clipBias:.003,multisample:renderProfile.mirrorSamples});
   object.name='Cabin mirror';object.position.set(x,y,z);object.rotation.y=rotation;group.add(object);
-  return registerPlanarReflection(scene,object,{mobile:renderProfile.mobile,maxDistance:renderProfile.mobile?5:12});
+  return registerPlanarReflection(scene,object,{mobile:renderProfile.mobile,maxDistance:renderProfile.mobile?5:12,arrivalOnly:true,canRenderFrom:(x,z)=>Math.abs(x)<=1.05&&z>=2.6});
  }
  box(1.86,1.77,.025,0,1.48,4.668,chrome);mirror(1.80,1.71,0,1.48,4.651,Math.PI);
  box(.025,1.77,1.45,1.0,1.48,3.78,chrome);mirror(1.39,1.71,.983,1.48,3.78,-Math.PI/2);

@@ -1,12 +1,9 @@
 import * as THREE from 'three';
-import {Reflector} from 'three/addons/objects/Reflector.js';
 import {renderProfile} from './render-profile.js';
-import {registerPlanarReflection} from './planar-reflections.js';
 import {arrival,entryBrandWall,entryVestibule} from './arrival-layout.js';
 
 export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,label,white,steel,black,arrivalFinish,glow,solids,contact}){
- const {veneer:wood,chrome,brushed:liftSteel,polished:jamb,enamel}=arrivalFinish;
- const mirrorObjects=[];
+ const {veneer:wood,chrome,brushed:liftSteel,polished:jamb,enamel,hallMirror}=arrivalFinish;
  // The active C14 portal sits on the hall face, clear of the sliding opening.
  for(const x of [-1.027,1.027])rounded(.14,2.39,.065,x,1.195,2.558,jamb,group,.01);
  rounded(2.20,.15,.065,0,2.375,2.558,jamb,group,.01);
@@ -65,13 +62,12 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
   }
   if(door.number==='1404')rounded(.08,.16,.055,.31,.95,.082,black,g,.006);
  }
- // Full-height mirror strips in steel frames. Shared guard prevents paired mirrors recursing.
+ // Hall mirrors use the shared room environment, with no extra scene render.
  for(const spec of arrival.mirrors){
   const z=spec.side==='far'?2.491:.151,rotation=spec.side==='far'?Math.PI:0;
-  const mirror=new Reflector(new THREE.PlaneGeometry(spec.width,2.37),{color:0xf0f0eb,textureWidth:renderProfile.mobile?128:256,textureHeight:renderProfile.mobile?192:512,clipBias:.003,multisample:0});
+  const mirror=new THREE.Mesh(new THREE.PlaneGeometry(spec.width,2.37),hallMirror);
   mirror.position.set(spec.x,1.205,z);mirror.rotation.y=rotation;
-  registerPlanarReflection(scene,mirror,{mobile:renderProfile.mobile,maxDistance:renderProfile.mobile?6:14,arrivalOnly:true});
-  mirror.name='Hall mirror';scene.add(mirror);mirrorObjects.push(mirror);
+  group.add(mirror);
   for(const dx of [-1,1])box(.020,2.43,.055,spec.x+dx*(spec.width/2+.012),1.215,z,chrome);
   for(const y of [.014,2.415])box(spec.width+.045,.022,.055,spec.x,y,z,chrome);
  }
@@ -257,6 +253,5 @@ export function buildArrivalDetails({scene,group,box,rounded,cylinder,mat,map,la
   solid.x1=Math.min(...corners.map(p=>p.x));solid.x2=Math.max(...corners.map(p=>p.x));
   solid.z1=Math.min(...corners.map(p=>p.z));solid.z2=Math.max(...corners.map(p=>p.z));
  }
- return {mirrors:mirrorObjects};
 }
 

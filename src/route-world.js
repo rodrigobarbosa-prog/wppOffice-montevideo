@@ -486,7 +486,7 @@ export async function buildRouteWorld(scene){
  for(const [x,z,color,intensity] of [[-.8,1.30,'#fff0dc',7.5],[4,1.30,'#f5f5ee',7],[7.12,-.42,'#fff0db',12]]){
   const hallLight=new THREE.PointLight(color,intensity,4.8,2);hallLight.position.set(x,2.54,z);scene.add(hallLight);
  }
- // Keep hall geometry available for mirrors without reflecting the full office and port.
+ // Keep arrival geometry available to the cabin mirrors without reflecting the full office and port.
  for(const object of [...group.children.slice(0,officeFirstChild),...group.children.slice(officeEndChild)])includeInArrivalReflection(object);
  includeInArrivalReflection(arrivalLift.fixed.parent);
  scene.traverse(object=>{if(object.isLight)includeInArrivalReflection(object);});
